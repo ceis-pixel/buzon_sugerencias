@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme("colors.brand.700");
+    outline-offset: 4px;
+  }
+
+  ::selection {
+    background-color: theme("colors.brand.100");
+    color: theme("colors.brand.900");
+  }
+}
