@@ -14,7 +14,7 @@ npm ci
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The design verification page works without Supabase credentials. Configure the variables below before using a Supabase client.
+Open [http://localhost:3000](http://localhost:3000). The responsive welcome page works without Supabase credentials. Configure the variables below before using a Supabase client.
 
 ## Supabase configuration
 
@@ -95,13 +95,13 @@ src/
 │   └── page.tsx
 ├── components/
 │   ├── common/
-│   │   ├── not-found-message.tsx
-│   │   └── page-container.tsx
+│   │   └── not-found-message.tsx
 │   ├── feedback/
 │   │   └── feedback-welcome.tsx
 │   └── layout/
-│       ├── site-footer.tsx
-│       └── site-header.tsx
+│       ├── Footer.tsx
+│       ├── Header.tsx
+│       └── PageContainer.tsx
 ├── lib/
 │   ├── env.ts
 │   ├── fonts.ts
@@ -118,7 +118,7 @@ src/
 - `app/`: route composition, root layout, metadata, and global styles.
 - `components/common/`: reusable interface primitives.
 - `components/feedback/`: feedback feature components.
-- `components/layout/`: shared page structure.
+- `components/layout/`: sticky institutional header, discreet footer, and a mobile-first `PageContainer` with optional `title`, `subtitle`, and `badge` props. Views use the container to keep content centered within 576px, with 16px horizontal and 24px vertical padding.
 - `lib/`: shared configuration and utilities.
 - `types/`: shared TypeScript contracts; keep component-specific props with their component.
 
@@ -134,4 +134,4 @@ src/
 feat(scaffold): initialize nextjs app router with typescript and tailwind
 ```
 
-The current page verifies the institutional palette and typography. Suggestion submission, authentication flows, database migrations, RLS policies, and administration screens belong to later issues.
+The current page demonstrates the responsive welcome layout. Both action buttons show local, accessible availability messages; they do not send suggestions or query tickets. The header's ticket shortcut targets the consultation button on the home page. Suggestion submission, ticket lookup, authentication flows, database migrations, RLS policies, and administration screens belong to later issues.
