@@ -5,12 +5,10 @@ const config = {
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: "#fff1f2",
-          100: "#ffe4e6",
-          700: "#9f1239",
-          900: "#881337",
-        },
+        primary: "#5C0000",
+        secondary: "#A6665C",
+        tertiary: "#001586",
+        "neutral-gray": "#847370",
       },
     },
   },

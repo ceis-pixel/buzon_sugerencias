@@ -5,24 +5,24 @@ import { siteConfig } from "@/lib/site-config";
 export function FeedbackWelcome() {
   return (
     <section aria-labelledby="welcome-title" className="max-w-3xl">
-      <span className="mb-8 inline-flex size-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-900">
+      <span className="mb-8 inline-flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
         <MessageSquareText aria-hidden="true" className="size-7" />
       </span>
-      <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-brand-900">
+      <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-primary">
         Tu opinión cuenta
       </p>
       <h1
         id="welcome-title"
-        className="text-balance text-4xl font-bold tracking-tight text-stone-900 sm:text-6xl"
+        className="text-balance text-4xl font-bold tracking-tight text-primary sm:text-6xl"
       >
         {siteConfig.name}
       </h1>
-      <p className="mt-6 max-w-2xl text-pretty text-lg leading-8 text-stone-600">
+      <p className="mt-6 max-w-2xl text-pretty text-lg leading-8 text-neutral-gray">
         {siteConfig.description}
       </p>
-      <div className="mt-10 max-w-xl border-l-4 border-brand-900 bg-white px-5 py-4">
-        <h2 className="font-semibold text-stone-900">Próximamente</h2>
-        <p className="mt-1 text-sm leading-6 text-stone-600">
+      <div className="mt-10 max-w-xl rounded-2xl border-l-4 border-primary bg-white px-5 py-4 shadow-sm">
+        <h2 className="font-semibold text-primary">Próximamente</h2>
+        <p className="mt-1 text-sm leading-6 text-neutral-gray">
           Estamos preparando este espacio. Pronto podrás enviar tus sugerencias
           sobre el servicio del comedor.
         </p>

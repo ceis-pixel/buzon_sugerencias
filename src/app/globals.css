@@ -7,13 +7,16 @@
     color-scheme: light;
   }
 
+  body {
+    @apply m-0 bg-slate-50 text-neutral-gray;
+  }
+
   :focus-visible {
-    outline: 2px solid theme("colors.brand.700");
+    outline: 2px solid theme("colors.primary");
     outline-offset: 4px;
   }
 
   ::selection {
-    background-color: theme("colors.brand.100");
-    color: theme("colors.brand.900");
+    @apply bg-primary text-white;
   }
 }

@@ -20,10 +20,10 @@ interface RootLayoutProps {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang={siteConfig.locale}>
-      <body className="flex min-h-dvh flex-col bg-stone-50 font-sans text-stone-900 antialiased">
+      <body className="flex min-h-dvh flex-col font-sans antialiased">
         <a
           href="#main-content"
-          className="sr-only rounded-lg bg-brand-900 px-4 py-3 text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50"
+          className="sr-only rounded-xl bg-primary px-4 py-3 text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50"
         >
           Saltar al contenido
         </a>
