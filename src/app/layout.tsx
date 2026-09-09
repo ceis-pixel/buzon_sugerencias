@@ -4,13 +4,14 @@ import type { ReactNode } from "react";
 import { PageContainer } from "@/components/common/page-container";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
-import { siteConfig } from "@/lib/site-config";
+import { manrope } from "@/lib/fonts";
 
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: `${siteConfig.name} - ${siteConfig.serviceName}`,
-  description: siteConfig.description,
+  title: "Buzón de Sugerencias | Comedor Universitario UNSCH",
+  description:
+    "Canal institucional para sugerencias y observaciones del comedor universitario UNSCH.",
 };
 
 interface RootLayoutProps {
@@ -19,7 +20,7 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang={siteConfig.locale}>
+    <html lang="es" className={manrope.variable}>
       <body className="flex min-h-dvh flex-col font-sans antialiased">
         <a
           href="#main-content"

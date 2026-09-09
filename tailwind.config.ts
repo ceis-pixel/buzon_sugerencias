@@ -4,6 +4,9 @@ const config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-manrope)", "system-ui", "sans-serif"],
+      },
       colors: {
         primary: "#5C0000",
         secondary: "#A6665C",

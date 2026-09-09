@@ -34,22 +34,35 @@ const colorTokens = [
 
 export default function HomePage() {
   return (
-    <section aria-labelledby="palette-title">
-      <p className="text-sm font-semibold uppercase tracking-widest text-secondary">
-        Sistema de diseño Crimson Heritage
-      </p>
-      <h1
-        id="palette-title"
-        className="mt-3 text-balance text-4xl font-bold tracking-tight text-primary sm:text-5xl"
-      >
-        Paleta institucional
-      </h1>
-      <p className="mt-4 max-w-2xl text-pretty leading-7">
-        Vista de comprobación de los colores y componentes del Buzón de
-        Sugerencias del Comedor UNSCH.
-      </p>
+    <section aria-labelledby="typography-title">
+      <header className="rounded-2xl border border-neutral-gray/20 bg-white p-6 shadow-sm sm:p-8">
+        <p className="text-sm font-medium uppercase tracking-widest text-secondary">
+          Sistema de diseño Crimson Heritage · Manrope
+        </p>
+        <h1
+          id="typography-title"
+          className="mt-4 text-2xl md:text-3xl font-bold text-primary"
+        >
+          Buzón de Sugerencias
+        </h1>
+        <h2 className="mt-4 text-lg font-semibold text-secondary">
+          Tu opinión mejora el comedor universitario
+        </h2>
+        <p className="mt-3 max-w-2xl text-base font-normal text-neutral-gray">
+          Comparte tus sugerencias y observaciones sobre el servicio del comedor.
+          Tu participación nos ayuda a mejorar la atención a nuestra comunidad
+          universitaria.
+        </p>
+        <p className="mt-4 text-sm font-medium text-neutral-gray">
+          Comedor Universitario UNSCH · Ayacucho, Perú.
+        </p>
+      </header>
 
-      <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <h2 id="palette-title" className="mt-10 text-xl font-semibold text-primary">
+        Paleta institucional
+      </h2>
+
+      <div className="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {colorTokens.map((token) => (
           <article
             key={token.name}
@@ -58,16 +71,16 @@ export default function HomePage() {
           >
             <div aria-hidden="true" className={`h-32 ${token.swatchClass}`} />
             <div className="p-5">
-              <h2
+              <h3
                 id={`color-${token.name}`}
                 className="text-lg font-semibold text-primary"
               >
                 {token.label}
-              </h2>
-              <p className="mt-2 font-mono text-sm text-primary">
+              </h3>
+              <p className="mt-2 text-sm font-medium text-primary">
                 {token.name}
               </p>
-              <p className="mt-1 font-mono text-sm text-primary">{token.hex}</p>
+              <p className="mt-1 text-sm font-medium text-primary">{token.hex}</p>
               <p className="mt-4 text-sm leading-6">{token.description}</p>
             </div>
           </article>
