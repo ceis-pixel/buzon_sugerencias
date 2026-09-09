@@ -16,17 +16,23 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). The responsive welcome page works without Supabase credentials. Configure the variables below before using a Supabase client.
 
-## Supabase configuration
+## Configuración del entorno
 
-Copy `.env.example` to `.env.local` and fill in the values for your project. Keep `.env.local` out of Git.
+Copia `.env.example` a `.env.local` y reemplaza los ejemplos con los valores del proyecto. Git ignora los archivos de entorno y conserva únicamente la plantilla documentada.
 
-| Variable | Used by |
+| Variable | Uso y validación |
 | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | All clients |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser and request-scoped server clients |
-| `SUPABASE_SERVICE_ROLE_KEY` | Privileged admin client only |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL HTTP/HTTPS sin credenciales; todos los clientes |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave pública anon o publishable, mínimo 12 caracteres |
+| `SUPABASE_SERVICE_ROLE_KEY` | Solo servidor; mínimo 20 caracteres, obligatoria al importar el cliente privilegiado |
+| `NEXT_PUBLIC_APP_URL` | URL HTTP/HTTPS de la aplicación; usar el dominio real en producción |
+| `NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN` | Dominio estudiantil sin @, protocolo ni ruta; valor institucional `unsch.edu.pe` |
 
-Public variables must be available when building browser code because Next.js inlines them. Configuration is validated when each client is instantiated; the admin module validates its server-only variables when imported. Missing or invalid values produce explanatory Spanish errors without exposing their values.
+Zod valida las cuatro variables públicas antes de `npm run build`, mediante `prebuild`. Los clientes también validan su configuración al instanciarse. Importar el esquema, ejecutar ESLint o comprobar tipos no exige credenciales. Los errores están en español y no incluyen valores. La validación verifica formato y presencia; no confirma que una credencial sea auténtica.
+
+Las variables `NEXT_PUBLIC_` quedan incorporadas al compilar: configura los valores de cada entorno antes del build y recompila cuando cambien. Nunca copies la clave de servicio a una variable pública. El prebuild rechaza alias públicos de service role y coincidencias con el secreto; el esquema rechaza claves `sb_secret_` y JWT con rol `service_role` en el campo anon. La lectura de la clave administrativa permanece en el módulo `server-only`.
+
+Para CI se permiten los placeholders de `.env.example`, con las cuatro variables públicas definidas y sin clave administrativa. No hay omisión automática de validación ni valores predeterminados silenciosos en producción. Consulta [la guía de despliegue](docs/deployment.md) para configurar Vercel y conocer la limitación de Cloudflare Pages.
 
 - Browser: import `createClient` from `@/lib/supabase/client` in a Client Component.
 - Server Components and Server Actions: import and await `createClient` from `@/lib/supabase/server`. A new client is created for each request.
@@ -66,9 +72,11 @@ npm run build
 npm run start
 ```
 
-`npm run check` runs lint, type checking, unit tests, and the production build in sequence. Type checking generates Next.js route types first, so it also works in a fresh checkout. The tests use synthetic local configuration and mocks for request cookies and privileged credentials; they do not connect to a Supabase project. Type checking also verifies query inference and rejects invalid table names, missing required fields, and invalid enum values.
+`npm run check-all` runs type checking, lint, and the validated production build. `npm run check` also runs unit tests first. The `pretypecheck` lifecycle generates Next.js route types, so type checking works in a fresh checkout. Tests use synthetic local configuration and mocks for request cookies and privileged credentials; they do not connect to a Supabase project. Type checking also verifies query inference and rejects invalid table names, missing required fields, and invalid enum values.
 
-Next.js 16 does not run ESLint during builds; keep the lint step in validation workflows. Production builds need network access to download Manrope through `next/font/google`; font files are then served locally at runtime. The current static pages can build without Supabase variables because they do not instantiate clients; the dynamic health endpoint validates configuration on each request.
+Next.js 16 removed `next lint`; the supported equivalent is `eslint . --max-warnings=0`. Production builds need network access to download Manrope through `next/font/google`; font files are then served locally at runtime. Run `npm run build` to include environment validation; `vercel.json` sets that command explicitly. The dynamic health endpoint validates its own configuration on each request.
+
+The [Sprint 1 closeout](docs/sprint-1-closeout.md) records the integrated deliverables and verification scope.
 
 ## Stack
 
