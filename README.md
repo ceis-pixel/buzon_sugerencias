@@ -103,9 +103,13 @@ src/
 │   └── page.tsx
 ├── components/
 │   ├── common/
+│   │   ├── Badge.tsx
 │   │   ├── Button.tsx
+│   │   ├── ShiftBadge.tsx
+│   │   ├── StatusBadge.tsx
 │   │   └── not-found-message.tsx
 │   ├── examples/
+│   │   ├── BadgeShowcase.tsx
 │   │   └── ButtonShowcase.tsx
 │   ├── feedback/
 │   │   └── feedback-welcome.tsx
@@ -145,7 +149,7 @@ src/
 feat(scaffold): initialize nextjs app router with typescript and tailwind
 ```
 
-The current page temporarily demonstrates the Sprint 2 button library inside the institutional layout. Its actions only update local state; they do not send suggestions or query tickets. The header's ticket shortcut still targets the consultation button. The welcome component remains available for later integration. Suggestion submission, ticket lookup, authentication flows, database migrations, RLS policies, and administration screens belong to later issues.
+The current page temporarily demonstrates Sprint 2 badges, ticket states, meal shifts, and buttons inside the institutional layout. Its actions only update local state; they do not send suggestions or query tickets. The header's ticket shortcut still targets the consultation button. The welcome component remains available for later integration. Suggestion submission, ticket lookup, authentication flows, database migrations, RLS policies, and administration screens belong to later issues.
 
 ## Sprint 2 — Button (Issue 2.1)
 
@@ -163,3 +167,20 @@ Native button attributes and a React 19 `ref` are supported. `type` defaults to 
 `isLoading` retains the label, replaces the left icon with a decorative Lucide spinner, and disables the action. Disabled links lose their destination and tab stop, and their click handler suppresses activation. Native buttons use the HTML `disabled` attribute. Both expose `aria-busy` and `aria-disabled`; decorative icons stay outside the accessible name. Supply an explicit Spanish `aria-label` for icon-only controls. Reduced-motion preferences disable the spinner animation, scaling, and transitions.
 
 `ButtonShowcase` covers all variants, sizes, disabled/loading states, full width, and link rendering. The loading demonstration uses an explicit finish control so it can be tested without timers or network calls. Validate with `npm run test` and `npm run check-all` using the environment documented above.
+
+## Sprint 2 — Badges (Issue 2.3)
+
+The home page now starts with `BadgeShowcase` and retains the button demonstration below it. All examples use local state only.
+
+`Badge` is a compact, non-interactive span that can render on the server. It accepts native span attributes, `children`, `className`, `icon`, `withDot`, and `pulse`. Variants are `primary`, `secondary`, `tertiary`, `neutral` (default), `success`, `warning`, and `outline`; sizes are `sm` (default) and `md`. Pulse is opt-in, only applies to the dot, and stops with reduced motion. Icons and dots are decorative; readable labels carry the meaning.
+
+```tsx
+<Badge variant="tertiary" withDot pulse>Aviso del sistema</Badge>
+<StatusBadge status="pending" />
+<StatusBadge status="in_review" size="md" />
+<ShiftBadge shift="lunch" isSelected />
+```
+
+`StatusBadge` derives its status type from `Database` and maps `pending`, `in_review`, and `resolved` to Pendiente, En revisión, and Atendido with Clock, Eye, and CheckCircle2. Colors follow the prescribed amber, tertiary, and emerald palettes. `ShiftBadge` similarly maps breakfast, lunch, and dinner to Desayuno, Almuerzo, and Cena with Coffee, UtensilsCrossed, and Moon. Selection uses the primary token and includes hidden text for assistive technology.
+
+Domain components accept the base badge's size, dot, pulse, and native span attributes, while resolving their own labels, variants, and icons. For an interactive filter, wrap `ShiftBadge` in a native button with `aria-pressed`, a click handler, and a 44px minimum touch target, as shown in `BadgeShowcase`. Use a live region around an updated ticket status only where announcements are needed; static badges do not announce themselves independently.
