@@ -103,7 +103,10 @@ src/
 │   └── page.tsx
 ├── components/
 │   ├── common/
+│   │   ├── Button.tsx
 │   │   └── not-found-message.tsx
+│   ├── examples/
+│   │   └── ButtonShowcase.tsx
 │   ├── feedback/
 │   │   └── feedback-welcome.tsx
 │   └── layout/
@@ -142,4 +145,21 @@ src/
 feat(scaffold): initialize nextjs app router with typescript and tailwind
 ```
 
-The current page demonstrates the responsive welcome layout. Both action buttons show local, accessible availability messages; they do not send suggestions or query tickets. The header's ticket shortcut targets the consultation button on the home page. Suggestion submission, ticket lookup, authentication flows, database migrations, RLS policies, and administration screens belong to later issues.
+The current page temporarily demonstrates the Sprint 2 button library inside the institutional layout. Its actions only update local state; they do not send suggestions or query tickets. The header's ticket shortcut still targets the consultation button. The welcome component remains available for later integration. Suggestion submission, ticket lookup, authentication flows, database migrations, RLS policies, and administration screens belong to later issues.
+
+## Sprint 2 — Button (Issue 2.1)
+
+Import `Button` and `ButtonProps` from `@/components/common/Button`. Variants are `primary` (default), `secondary`, `ghost`, and `tertiary`; sizes are `sm`, `md` (default), and `lg`. All sizes retain a minimum 44px touch target. Manrope is inherited from the root theme.
+
+```tsx
+<Button leftIcon={<Send />} onClick={handleSubmit}>Enviar sugerencia</Button>
+<Button variant="secondary" rightIcon={<Search />}>Consultar ticket</Button>
+<Button fullWidth isLoading={isSubmitting}>Enviar sugerencia</Button>
+<Button as="a" href="/tickets" variant="ghost">Consultar ticket</Button>
+```
+
+Native button attributes and a React 19 `ref` are supported. `type` defaults to `button` to avoid unintended form submission; set `type="submit"` explicitly inside a form. `as="a"` requires `href` and accepts anchor attributes and an anchor reference instead of button attributes.
+
+`isLoading` retains the label, replaces the left icon with a decorative Lucide spinner, and disables the action. Disabled links lose their destination and tab stop, and their click handler suppresses activation. Native buttons use the HTML `disabled` attribute. Both expose `aria-busy` and `aria-disabled`; decorative icons stay outside the accessible name. Supply an explicit Spanish `aria-label` for icon-only controls. Reduced-motion preferences disable the spinner animation, scaling, and transitions.
+
+`ButtonShowcase` covers all variants, sizes, disabled/loading states, full width, and link rendering. The loading demonstration uses an explicit finish control so it can be tested without timers or network calls. Validate with `npm run test` and `npm run check-all` using the environment documented above.

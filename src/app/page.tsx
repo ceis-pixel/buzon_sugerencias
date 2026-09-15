@@ -1,14 +1,14 @@
-import { FeedbackWelcome } from "@/components/feedback/feedback-welcome";
+import { ButtonShowcase } from "@/components/examples/ButtonShowcase";
 import { PageContainer } from "@/components/layout/PageContainer";
 
 export default function HomePage() {
   return (
     <PageContainer
-      title="Tu opinión cuenta"
-      subtitle="Un espacio para mejorar juntos el comedor universitario."
-      badge="Vista de demostración"
+      title="Biblioteca de componentes"
+      subtitle="Botones claros y consistentes para cada acción del comedor universitario."
+      badge="Sprint 2 · Demostración de interfaz"
     >
-      <FeedbackWelcome />
+      <ButtonShowcase />
     </PageContainer>
   );
 }
