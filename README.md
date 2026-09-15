@@ -105,11 +105,14 @@ src/
 │   ├── common/
 │   │   ├── Badge.tsx
 │   │   ├── Button.tsx
+│   │   ├── Card.tsx
+│   │   ├── Modal.tsx
 │   │   ├── ShiftBadge.tsx
 │   │   ├── StatusBadge.tsx
 │   │   └── not-found-message.tsx
 │   ├── examples/
 │   │   ├── BadgeShowcase.tsx
+│   │   ├── CardModalShowcase.tsx
 │   │   └── ButtonShowcase.tsx
 │   ├── feedback/
 │   │   └── feedback-welcome.tsx
@@ -184,3 +187,28 @@ The home page now starts with `BadgeShowcase` and retains the button demonstrati
 `StatusBadge` derives its status type from `Database` and maps `pending`, `in_review`, and `resolved` to Pendiente, En revisión, and Atendido with Clock, Eye, and CheckCircle2. Colors follow the prescribed amber, tertiary, and emerald palettes. `ShiftBadge` similarly maps breakfast, lunch, and dinner to Desayuno, Almuerzo, and Cena with Coffee, UtensilsCrossed, and Moon. Selection uses the primary token and includes hidden text for assistive technology.
 
 Domain components accept the base badge's size, dot, pulse, and native span attributes, while resolving their own labels, variants, and icons. For an interactive filter, wrap `ShiftBadge` in a native button with `aria-pressed`, a click handler, and a 44px minimum touch target, as shown in `BadgeShowcase`. Use a live region around an updated ticket status only where announcements are needed; static badges do not announce themselves independently.
+
+## Sprint 2 — Card and Modal (Issue 2.4)
+
+The home page starts with `CardModalShowcase`, followed by the existing badge and button examples. Its form remains a local demonstration and performs no network requests or persistence.
+
+`Card` supports `default`, `interactive`, `bordered`, and `ghost` variants and `none`, `sm`, `md` (default), and `lg` padding. Compose it with `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, and `CardFooter`. Each subcomponent forwards native attributes and `className`; `CardTitle` defaults to `h2` and also supports `h3`/`h4`. Set `CardFooter withBorder` for the optional separator. Padding belongs to the root; subcomponents provide internal spacing without doubling it. All cards keep `rounded-2xl` and `shadow-sm`.
+
+The interactive variant provides visual feedback. Supply a native link or button for the action, as demonstrated by the accessible button covering the lunch card. Do not nest additional interactive controls under that covering button.
+
+```tsx
+<Card>
+  <CardHeader><CardTitle>Tu sugerencia</CardTitle></CardHeader>
+  <CardContent><CardDescription>Comparte una idea para mejorar el comedor.</CardDescription></CardContent>
+  <CardFooter withBorder><Button onClick={openModal}>Continuar</Button></CardFooter>
+</Card>
+<Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Comparte una idea">
+  <p>Contenido de prueba.</p>
+</Modal>
+```
+
+`Modal` is controlled: its owner must set `isOpen` to false in `onClose`. It uses native `dialog.showModal()` to enter the browser's top layer and make background content inert. Opening focuses its title; Tab and Shift+Tab remain within the dialog, and closing restores focus to the opener. Escape, the optional X button, and a pointer gesture that starts and ends on the backdrop request closure. Interior clicks and drags starting inside do not dismiss it. Body scroll locks are counted across instances and restore the previous inline overflow value on cleanup.
+
+Optional props are `title`, `description`, `footer`, `size` (`sm`, `md`, `lg`, `full`), and `showCloseButton` (default true). Missing titles receive a hidden Spanish accessible name. Each instance uses distinct label IDs. If hiding the X, provide a visible closing action in the content/footer for touch users. The demonstration always retains Cancelar.
+
+The dialog remains hidden during server rendering until its client effect opens it. A structural wrapper prevents parent spacing utilities from overriding its centered margins. Long content scrolls inside a viewport-limited panel while the header/footer remain visible. The fade animation respects reduced motion. Native `<dialog>` support is required; see [MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog).
