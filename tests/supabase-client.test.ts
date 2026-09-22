@@ -40,11 +40,15 @@ it("infers selected rows and rejects invalid table names and mutation payloads",
     Array<{ message: string; admins: { full_name: string } }>
   >();
 
-  client.from("suggestions").insert({ content: "Mejorar la atención.", meal_shift: "lunch" });
+  client.from("suggestions").insert({
+    message: "Mejorar la atención.",
+    shift: "lunch",
+    category: "service",
+  });
   client.from("suggestions").update({ status: "in_review" });
   // @ts-expect-error Unknown tables must not be accepted.
   client.from("unknown_table");
-  // @ts-expect-error Required content and meal_shift must not be omitted.
+  // @ts-expect-error Required message, shift, and category must not be omitted.
   client.from("suggestions").insert({});
   // @ts-expect-error Status must belong to the approved enum.
   client.from("suggestions").update({ status: "closed" });

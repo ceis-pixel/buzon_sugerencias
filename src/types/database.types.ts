@@ -1,5 +1,3 @@
-// Provisional schema contract. Replace this file with Supabase CLI output once
-// the database migrations exist; these types do not create tables or RLS policies.
 export type Json =
   | string
   | number
@@ -14,28 +12,34 @@ export interface Database {
       suggestions: {
         Row: {
           id: string;
-          ticket_code: string;
-          content: string;
-          meal_shift: Database["public"]["Enums"]["meal_shift"];
-          status: Database["public"]["Enums"]["suggestion_status"];
+          ticket_code: string | null;
+          shift: Database["public"]["Enums"]["shift_type"];
+          category: Database["public"]["Enums"]["suggestion_category"];
+          message: string;
+          photo_url: string | null;
+          status: Database["public"]["Enums"]["ticket_status"];
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          ticket_code?: string;
-          content: string;
-          meal_shift: Database["public"]["Enums"]["meal_shift"];
-          status?: Database["public"]["Enums"]["suggestion_status"];
+          ticket_code?: string | null;
+          shift: Database["public"]["Enums"]["shift_type"];
+          category: Database["public"]["Enums"]["suggestion_category"];
+          message: string;
+          photo_url?: string | null;
+          status?: Database["public"]["Enums"]["ticket_status"];
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          ticket_code?: string;
-          content?: string;
-          meal_shift?: Database["public"]["Enums"]["meal_shift"];
-          status?: Database["public"]["Enums"]["suggestion_status"];
+          ticket_code?: string | null;
+          shift?: Database["public"]["Enums"]["shift_type"];
+          category?: Database["public"]["Enums"]["suggestion_category"];
+          message?: string;
+          photo_url?: string | null;
+          status?: Database["public"]["Enums"]["ticket_status"];
           created_at?: string;
           updated_at?: string;
         };
@@ -102,9 +106,25 @@ export interface Database {
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };
     Enums: {
+      shift_type: "breakfast" | "lunch" | "dinner";
+      suggestion_category: "menu" | "hygiene" | "portion" | "service" | "infrastructure";
+      ticket_status: "pending" | "in_review" | "resolved";
+      /** @deprecated Use shift_type instead */
       meal_shift: "breakfast" | "lunch" | "dinner";
+      /** @deprecated Use ticket_status instead */
       suggestion_status: "pending" | "in_review" | "resolved";
     };
     CompositeTypes: { [_ in never]: never };
   };
 }
+
+export type ShiftType = Database["public"]["Enums"]["shift_type"];
+export type SuggestionCategory = Database["public"]["Enums"]["suggestion_category"];
+export type TicketStatus = Database["public"]["Enums"]["ticket_status"];
+
+export type SuggestionRow = Database["public"]["Tables"]["suggestions"]["Row"];
+export type SuggestionInsert = Database["public"]["Tables"]["suggestions"]["Insert"];
+export type SuggestionUpdate = Database["public"]["Tables"]["suggestions"]["Update"];
+
+/** @deprecated Use ShiftType instead */
+export type MealShift = ShiftType;

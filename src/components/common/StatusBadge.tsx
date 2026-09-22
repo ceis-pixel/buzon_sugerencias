@@ -1,9 +1,9 @@
 import { CheckCircle2, Clock, Eye, type LucideIcon } from "lucide-react";
 
 import { Badge, type BadgeProps } from "@/components/common/Badge";
-import type { Database } from "@/types/database.types";
+import type { TicketStatus } from "@/types/database.types";
 
-export type TicketStatus = Database["public"]["Enums"]["suggestion_status"];
+export type { TicketStatus };
 
 export interface StatusBadgeProps extends Omit<BadgeProps, "children" | "icon" | "variant"> {
   status: TicketStatus;

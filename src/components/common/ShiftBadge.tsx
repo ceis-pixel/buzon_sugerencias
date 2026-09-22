@@ -1,9 +1,9 @@
 import { Coffee, Moon, UtensilsCrossed, type LucideIcon } from "lucide-react";
 
 import { Badge, type BadgeProps } from "@/components/common/Badge";
-import type { Database } from "@/types/database.types";
+import type { ShiftType } from "@/types/database.types";
 
-export type MealShift = Database["public"]["Enums"]["meal_shift"];
+export type MealShift = ShiftType;
 
 export interface ShiftBadgeProps extends Omit<BadgeProps, "children" | "icon" | "variant"> {
   shift: MealShift;
