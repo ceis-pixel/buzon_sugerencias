@@ -26,7 +26,7 @@ export function Header() {
         </Link>
 
         <div className="flex shrink-0 items-center gap-2">
-          <span className="rounded-full border border-tertiary/20 bg-tertiary/10 px-2 py-1 text-xs font-semibold text-tertiary">
+          <span className="rounded-full border border-secondary/20 bg-primary/5 px-2 py-1 text-xs font-semibold text-primary">
             FUSCH<span className="hidden sm:inline"> · Salud y Nutrición</span>
           </span>
           <Link

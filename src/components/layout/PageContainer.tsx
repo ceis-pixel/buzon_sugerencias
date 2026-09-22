@@ -18,7 +18,7 @@ export function PageContainer({
       {(title || subtitle || badge) && (
         <header className="mb-6 space-y-3">
           {badge && (
-            <span className="inline-flex max-w-full items-center rounded-xl border border-tertiary/20 bg-tertiary/10 px-3 py-1 text-xs font-medium text-tertiary">
+            <span className="inline-flex max-w-full items-center rounded-xl border border-secondary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
               {badge}
             </span>
           )}

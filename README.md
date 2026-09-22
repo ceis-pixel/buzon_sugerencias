@@ -103,19 +103,24 @@ src/
 │   └── page.tsx
 ├── components/
 │   ├── common/
+│   │   ├── AlertBanner.tsx
 │   │   ├── Badge.tsx
 │   │   ├── Button.tsx
 │   │   ├── Card.tsx
 │   │   ├── EmptyState.tsx
 │   │   ├── emptyStatePresets.ts
+│   │   ├── Input.tsx
 │   │   ├── Modal.tsx
 │   │   ├── ShiftBadge.tsx
 │   │   ├── StatusBadge.tsx
+│   │   ├── Textarea.tsx
 │   │   └── not-found-message.tsx
 │   ├── examples/
+│   │   ├── AlertBannerShowcase.tsx
 │   │   ├── BadgeShowcase.tsx
 │   │   ├── CardModalShowcase.tsx
 │   │   ├── EmptyStateShowcase.tsx
+│   │   ├── FormFieldsShowcase.tsx
 │   │   └── ButtonShowcase.tsx
 │   ├── feedback/
 │   │   └── feedback-welcome.tsx
@@ -155,7 +160,7 @@ src/
 feat(scaffold): initialize nextjs app router with typescript and tailwind
 ```
 
-The current page temporarily demonstrates Sprint 2 empty states, cards, dialogs, badges, ticket states, meal shifts, and buttons inside the institutional layout. Its actions only update local state; they do not send suggestions or query tickets. The header's ticket shortcut still targets the consultation button. The welcome component remains available for later integration. Suggestion submission, ticket lookup, authentication flows, database migrations, RLS policies, and administration screens belong to later issues.
+The current page demonstrates the complete Sprint 2 UI kit: alerts, form fields, empty states, cards, dialogs, badges, ticket states, meal shifts, and buttons inside the institutional layout. Its actions only update local state; they do not send suggestions or query tickets. The header's ticket shortcut still targets the consultation button. The welcome component remains available for later integration. Suggestion submission, ticket lookup, authentication flows, database migrations, RLS policies, and administration screens belong to later issues. See the [Sprint 2 closeout](docs/sprint-2-closeout.md) for validation scope.
 
 ## Sprint 2 — Button (Issue 2.1)
 
@@ -176,7 +181,7 @@ Native button attributes and a React 19 `ref` are supported. `type` defaults to 
 
 ## Sprint 2 — Badges (Issue 2.3)
 
-The home page now starts with `BadgeShowcase` and retains the button demonstration below it. All examples use local state only.
+The home page includes `BadgeShowcase` and the button demonstration. All examples use local state only.
 
 `Badge` is a compact, non-interactive span that can render on the server. It accepts native span attributes, `children`, `className`, `icon`, `withDot`, and `pulse`. Variants are `primary`, `secondary`, `tertiary`, `neutral` (default), `success`, `warning`, and `outline`; sizes are `sm` (default) and `md`. Pulse is opt-in, only applies to the dot, and stops with reduced motion. Icons and dots are decorative; readable labels carry the meaning.
 
@@ -193,7 +198,7 @@ Domain components accept the base badge's size, dot, pulse, and native span attr
 
 ## Sprint 2 — Card and Modal (Issue 2.4)
 
-The home page starts with `CardModalShowcase`, followed by the existing badge and button examples. Its form remains a local demonstration and performs no network requests or persistence.
+The home page includes `CardModalShowcase` alongside the badge and button examples. Its form remains a local demonstration and performs no network requests or persistence.
 
 `Card` supports `default`, `interactive`, `bordered`, and `ghost` variants and `none`, `sm`, `md` (default), and `lg` padding. Compose it with `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, and `CardFooter`. Each subcomponent forwards native attributes and `className`; `CardTitle` defaults to `h2` and also supports `h3`/`h4`. Set `CardFooter withBorder` for the optional separator. Padding belongs to the root; subcomponents provide internal spacing without doubling it. All cards keep `rounded-2xl` and `shadow-sm`.
 
@@ -237,3 +242,44 @@ Both actions reuse `Button`. The primary action uses the primary variant and may
 Import presets from `@/components/common/emptyStatePresets` and `EmptyState` from `@/components/common/EmptyState`. Render callback-based usages within a Client Component; static and link-only compositions may be rendered from synchronous Server Components. Keep the icon component and its preset in the same rendering environment rather than passing function-valued icons across a server/client boundary.
 
 Each instance connects its heading and description through unique IDs. Icons are decorative, actions have visible Spanish labels, and the component does not create an alert/live region by default. The showcase puts announcements in separate status regions, demonstrates link navigation to a focused ticket field, and refreshes a simulated inbox without API calls or storage.
+
+## Sprint 2 — Campos de formulario (Issue 2.2)
+
+`Input` y `Textarea` se incorporaron durante el cierre del Issue 2.6 porque faltaban en el repositorio. Ambos requieren `label`, aceptan `helperText`, `error`, atributos HTML nativos, `className` y `ref` de React 19. Asocian etiquetas, ayuda y errores con IDs únicos, conservan `aria-describedby` externo y marcan `aria-invalid` cuando hay un error. La validación pertenece al formulario consumidor.
+
+`Textarea` es controlado: requiere `value: string` y un `onChange` para editar, o `readOnly` para lectura. Su contador (`showCount`, activo por defecto) refleja el valor y el `maxLength` opcional; cuenta unidades UTF-16, como el límite nativo del navegador. No anuncia cada pulsación. El formulario de ejemplo valida un código ficticio `UNSCH-A39B`, exige 20 caracteres de contenido útil y limita la propuesta a 300. Al fallar, muestra ayuda didáctica y enfoca el primer campo inválido. Limpiar restablece valores, contador y errores. Estas reglas de ejemplo no constituyen el contrato definitivo del backend.
+
+## Sprint 2 — AlertBanner (Issue 2.6)
+
+`AlertBanner` es un Client Component. Recibe `description: ReactNode`, `title?`, `variant?`, `icon?: LucideIcon`, `action?`, `onClose?`, `isDismissible?` y `className?`. Usa Manrope, `rounded-2xl`, `shadow-sm`, iconos decorativos y controles con área táctil mínima de 44px.
+
+| Variante | Uso | Paleta | Rol |
+| --- | --- | --- | --- |
+| `system` (predeterminada) | Avisos de la plataforma | `tertiary` #001586, fondo 5%, borde 20% | `status` |
+| `info` | Orientación general | Neutros, texto gris oscuro | `status` |
+| `warning` | Atención requerida | Ámbar | `alert` |
+| `error` | Fallos de la operación | `primary` #5C0000, fondo 5%, borde 20% | `alert` |
+| `success` | Confirmaciones | Esmeralda | `status` |
+
+```tsx
+<AlertBanner
+  title="Aviso de la plataforma"
+  description="Conserva tu código para consultar el estado de tu sugerencia."
+  action={{ label: "Consultar ticket", href: "#ticket-search" }}
+/>
+<AlertBanner
+  variant="error"
+  title="No pudimos completar la consulta"
+  description="Inténtalo nuevamente en unos minutos."
+  action={{ label: "Reintentar", onClick: retry }}
+  onClose={handleDismiss}
+/>
+```
+
+El azul técnico no identifica a la institución: las etiquetas institucionales del encabezado y del contenedor usan carmesí. Las variantes `tertiary` de Button/Badge se reservan para avisos y el estado automático «En revisión» mantiene la semántica del Issue 2.3.
+
+Una acción con `href` usa un enlace nativo; con `onClick` usa un botón que no envía formularios. Si se proporcionan ambos, el enlace conserva el callback. Sin destino ni callback, el botón queda deshabilitado.
+
+`onClose` habilita el descarte por defecto. `isDismissible={false}` lo deshabilita; `isDismissible={true}` permite descartarlo localmente incluso sin callback. El componente se oculta después de la transición de 200ms y entonces llama a `onClose` una sola vez. El temporizador se cancela al desmontar y el movimiento reducido omite la espera. Para mostrar un nuevo aviso, monta una instancia nueva (por ejemplo, cambia su `key`). El consumidor decide dónde devolver el foco; la vitrina enfoca el botón para restaurar el aviso. No se descarta automáticamente por tiempo.
+
+Define callbacks e iconos personalizados dentro de un Client Component para respetar la frontera de serialización de Next.js. Usa `alert` para mensajes urgentes y `status` para actualizaciones no urgentes. El anuncio inicial de contenido estático depende del lector de pantalla; estos roles son especialmente útiles cuando se insertan o actualizan mensajes tras una interacción.
