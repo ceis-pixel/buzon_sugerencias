@@ -79,23 +79,29 @@ export interface Database {
         Row: {
           id: string;
           suggestion_id: string;
-          admin_id: string;
-          message: string;
+          responder_email: string;
+          response_text: string;
+          is_internal: boolean;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
           suggestion_id: string;
-          admin_id: string;
-          message: string;
+          responder_email: string;
+          response_text: string;
+          is_internal?: boolean;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
           suggestion_id?: string;
-          admin_id?: string;
-          message?: string;
+          responder_email?: string;
+          response_text?: string;
+          is_internal?: boolean;
           created_at?: string;
+          updated_at?: string;
         };
         Relationships: [
           {
@@ -106,11 +112,11 @@ export interface Database {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "ticket_responses_admin_id_fkey";
-            columns: ["admin_id"];
+            foreignKeyName: "ticket_responses_responder_email_fkey";
+            columns: ["responder_email"];
             isOneToOne: false;
             referencedRelation: "admins";
-            referencedColumns: ["id"];
+            referencedColumns: ["email"];
           },
         ];
       };
@@ -146,6 +152,11 @@ export type SuggestionUpdate = Database["public"]["Tables"]["suggestions"]["Upda
 export type AdminRow = Database["public"]["Tables"]["admins"]["Row"];
 export type AdminInsert = Database["public"]["Tables"]["admins"]["Insert"];
 export type AdminUpdate = Database["public"]["Tables"]["admins"]["Update"];
+
+export type TicketResponse = Database["public"]["Tables"]["ticket_responses"]["Row"];
+export type TicketResponseRow = Database["public"]["Tables"]["ticket_responses"]["Row"];
+export type TicketResponseInsert = Database["public"]["Tables"]["ticket_responses"]["Insert"];
+export type TicketResponseUpdate = Database["public"]["Tables"]["ticket_responses"]["Update"];
 
 /** @deprecated Use ShiftType instead */
 export type MealShift = ShiftType;

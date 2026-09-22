@@ -34,10 +34,10 @@ it("infers selected rows and rejects invalid table names and mutation payloads",
     Array<Pick<Database["public"]["Tables"]["suggestions"]["Row"], "id" | "status">>
   >();
 
-  const responses = client.from("ticket_responses").select("message, admins(full_name)");
+  const responses = client.from("ticket_responses").select("response_text, is_internal, admins(full_name)");
   expectTypeOf(responses).not.toBeAny();
   expectTypeOf<QueryData<typeof responses>>().toEqualTypeOf<
-    Array<{ message: string; admins: { full_name: string } }>
+    Array<{ response_text: string; is_internal: boolean; admins: { full_name: string } }>
   >();
 
   client.from("suggestions").insert({
@@ -53,7 +53,7 @@ it("infers selected rows and rejects invalid table names and mutation payloads",
   // @ts-expect-error Status must belong to the approved enum.
   client.from("suggestions").update({ status: "closed" });
   // @ts-expect-error Response ownership and content must be supplied.
-  client.from("ticket_responses").insert({ message: "Gracias por tu sugerencia." });
+  client.from("ticket_responses").insert({ response_text: "Gracias por tu sugerencia." });
 
   const adminQuery = client.from("admins").select("id, email, is_active");
   expectTypeOf(adminQuery).not.toBeAny();
