@@ -1,4 +1,5 @@
 import { AlertBannerShowcase } from "@/components/examples/AlertBannerShowcase";
+import { AuthShowcase } from "@/components/examples/AuthShowcase";
 import { BadgeShowcase } from "@/components/examples/BadgeShowcase";
 import { ButtonShowcase } from "@/components/examples/ButtonShowcase";
 import { CardModalShowcase } from "@/components/examples/CardModalShowcase";
@@ -11,9 +12,10 @@ export default function HomePage() {
     <PageContainer
       title="Biblioteca de componentes"
       subtitle="Botones, campos, indicadores y mensajes para una experiencia clara y cercana."
-      badge="Sprint 2 · Demostración de interfaz"
+      badge="Sprint 4 · Autenticación e interfaz"
     >
       <div className="space-y-8">
+        <AuthShowcase />
         <AlertBannerShowcase />
         <FormFieldsShowcase />
         <EmptyStateShowcase />
