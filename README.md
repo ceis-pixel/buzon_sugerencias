@@ -47,19 +47,19 @@ The helpers do not implement login or authorization. Before using sessions in pr
 
 `GET /api/health` returns `200` after creating the request-scoped Supabase client, or `503` with a configuration error when its public variables are absent or invalid. Responses are not cached. This is an initialization check, not a database connectivity, credential validity, schema, or authorization check; it makes no Supabase API requests and does not require the service role key.
 
-### Provisional database contract
+### Database contract — Sprint 3
 
-`src/types/database.types.ts` contains the initial public schema contract, not generated evidence of an existing database. No tables, migrations, or RLS policies are created in this issue. Its assumptions are:
+`supabase/migrations/` contains the six ordered Sprint 3 migrations. `src/types/database.types.ts` is maintained against that SQL contract; it does not prove that a remote project has been migrated. See the [Sprint 3 closeout](docs/sprint-3-closeout.md) for the audit, application instructions, and test limits.
 
-- `suggestions`: UUID `id`, generated `ticket_code`, required `content` and `meal_shift`, `status` defaulting to `pending`, and database-generated `created_at`/`updated_at` timestamps.
-- `admins`: UUID `id` supplied from the administrator's auth identity, required `full_name`, and a generated `created_at` timestamp. Passwords are managed by Supabase Auth.
-- `ticket_responses`: generated UUID `id`, required `suggestion_id`, `admin_id`, and `message`, plus a generated `created_at` timestamp. The two foreign keys reference `suggestions.id` and `admins.id`.
-- `meal_shift`: `breakfast`, `lunch`, `dinner`; `suggestion_status`: `pending`, `in_review`, `resolved`.
+- `suggestions`: generated UUID `id`, required `shift`, `category`, and `message` (10 non-padding characters minimum, 500 characters maximum), optional `photo_url`. The insertion trigger fills null/blank `ticket_code`, always forces `pending`, and sets timestamps. Updates refresh `updated_at`. Explicit nonblank codes and creation timestamps are preserved.
+- `admins`: generated UUID `id`, unique institutional `email`, `full_name`, `role`, `is_active`, and timestamps. This is a moderator whitelist, separate from Supabase Auth user IDs. `is_admin()` checks the active whitelist against the authenticated JWT email.
+- `ticket_responses`: generated UUID `id`, required `suggestion_id`, `responder_email`, `response_text`, optional `is_internal` (false by default), and timestamps. The foreign keys reference `suggestions.id` and `admins.email`. Public responses are readable; internal notes require an active admin.
+- `shift_type`: `breakfast`, `lunch`, `dinner`; `ticket_status`: `pending`, `in_review`, `resolved`; `suggestion_category`: `menu`, `hygiene`, `portion`, `service`, `infrastructure`.
 
-Once migrations are established, replace the whole type file with [Supabase CLI output](https://supabase.com/docs/guides/api/rest/generating-types) and run the type checks again:
+After applying the migrations to the intended project, compare the contract with [Supabase CLI output](https://supabase.com/docs/guides/api/rest/generating-types). Preserve or relocate the domain type aliases, including `NewSuggestion`, when adopting generated types:
 
 ```bash
-npx supabase gen types typescript --project-id YOUR_PROJECT_REF --schema public > src/types/database.types.ts
+npx supabase gen types typescript --project-id YOUR_PROJECT_REF --schema public > database.generated.ts
 ```
 
 ## Validation and production
@@ -73,6 +73,8 @@ npm run start
 ```
 
 `npm run check-all` runs type checking, lint, and the validated production build. `npm run check` also runs unit tests first. The `pretypecheck` lifecycle generates Next.js route types, so type checking works in a fresh checkout. Tests use synthetic local configuration and mocks for request cookies and privileged credentials; they do not connect to a Supabase project. Type checking also verifies query inference and rejects invalid table names, missing required fields, and invalid enum values.
+
+`npm run test -- tests/database-migrations.test.ts` executes all six migrations against isolated in-memory PostgreSQL via PGlite, including their SQL self-tests. Auth claims and Storage tables are explicit test fixtures, while PostgreSQL triggers, constraints, and RLS run normally. It does not emulate the Supabase HTTP services, upload size enforcement, or multiple concurrent database connections. PGlite is a development-only dependency.
 
 Next.js 16 removed `next lint`; the supported equivalent is `eslint . --max-warnings=0`. Production builds need network access to download Manrope through `next/font/google`; font files are then served locally at runtime. Run `npm run build` to include environment validation; `vercel.json` sets that command explicitly. The dynamic health endpoint validates its own configuration on each request.
 

@@ -23,12 +23,15 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          // Assigned by the insertion trigger when omitted, null, or blank.
           ticket_code?: string | null;
           shift: Database["public"]["Enums"]["shift_type"];
           category: Database["public"]["Enums"]["suggestion_category"];
           message: string;
           photo_url?: string | null;
+          // The insertion trigger always overrides this value with pending.
           status?: Database["public"]["Enums"]["ticket_status"];
+          // Omitted timestamps are supplied by PostgreSQL, not the browser.
           created_at?: string;
           updated_at?: string;
         };
@@ -151,6 +154,8 @@ export type TicketStatus = Database["public"]["Enums"]["ticket_status"];
 
 export type SuggestionRow = Database["public"]["Tables"]["suggestions"]["Row"];
 export type SuggestionInsert = Database["public"]["Tables"]["suggestions"]["Insert"];
+// Browser submissions contain only user-authored fields.
+export type NewSuggestion = Pick<SuggestionInsert, "shift" | "category" | "message" | "photo_url">;
 export type SuggestionUpdate = Database["public"]["Tables"]["suggestions"]["Update"];
 
 export type AdminRow = Database["public"]["Tables"]["admins"]["Row"];
