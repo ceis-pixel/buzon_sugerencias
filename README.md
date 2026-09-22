@@ -106,6 +106,8 @@ src/
 │   │   ├── Badge.tsx
 │   │   ├── Button.tsx
 │   │   ├── Card.tsx
+│   │   ├── EmptyState.tsx
+│   │   ├── emptyStatePresets.ts
 │   │   ├── Modal.tsx
 │   │   ├── ShiftBadge.tsx
 │   │   ├── StatusBadge.tsx
@@ -113,6 +115,7 @@ src/
 │   ├── examples/
 │   │   ├── BadgeShowcase.tsx
 │   │   ├── CardModalShowcase.tsx
+│   │   ├── EmptyStateShowcase.tsx
 │   │   └── ButtonShowcase.tsx
 │   ├── feedback/
 │   │   └── feedback-welcome.tsx
@@ -152,7 +155,7 @@ src/
 feat(scaffold): initialize nextjs app router with typescript and tailwind
 ```
 
-The current page temporarily demonstrates Sprint 2 badges, ticket states, meal shifts, and buttons inside the institutional layout. Its actions only update local state; they do not send suggestions or query tickets. The header's ticket shortcut still targets the consultation button. The welcome component remains available for later integration. Suggestion submission, ticket lookup, authentication flows, database migrations, RLS policies, and administration screens belong to later issues.
+The current page temporarily demonstrates Sprint 2 empty states, cards, dialogs, badges, ticket states, meal shifts, and buttons inside the institutional layout. Its actions only update local state; they do not send suggestions or query tickets. The header's ticket shortcut still targets the consultation button. The welcome component remains available for later integration. Suggestion submission, ticket lookup, authentication flows, database migrations, RLS policies, and administration screens belong to later issues.
 
 ## Sprint 2 — Button (Issue 2.1)
 
@@ -212,3 +215,25 @@ The interactive variant provides visual feedback. Supply a native link or button
 Optional props are `title`, `description`, `footer`, `size` (`sm`, `md`, `lg`, `full`), and `showCloseButton` (default true). Missing titles receive a hidden Spanish accessible name. Each instance uses distinct label IDs. If hiding the X, provide a visible closing action in the content/footer for touch users. The demonstration always retains Cancelar.
 
 The dialog remains hidden during server rendering until its client effect opens it. A structural wrapper prevents parent spacing utilities from overriding its centered margins. Long content scrolls inside a viewport-limited panel while the header/footer remain visible. The fade animation respects reduced motion. Native `<dialog>` support is required; see [MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog).
+
+## Sprint 2 — EmptyState (Issue 2.5)
+
+`EmptyState` accepts a Lucide component in `icon`, Spanish `title` and `description`, optional `action` and `secondaryAction`, `variant` (`card` by default or `plain`), and `className`. Card mode uses `rounded-2xl`, `shadow-sm`, a subtle border, and 32px padding. Plain mode has no background, border, or shadow and uses 40px vertical / 16px horizontal padding for embedding inside another container.
+
+Both actions reuse `Button`. The primary action uses the primary variant and may include a Lucide `icon`; the secondary action uses ghost. Each accepts `label`, `onClick`, and `href`. A nonempty `href` renders a native link and keeps normal browser navigation; if a callback is also supplied, it runs on activation. Without `href`, the action is a non-submitting native button. An action without either a destination or a callback is disabled. Omitted actions render no controls.
+
+```tsx
+<EmptyState
+  {...emptyStatePresets.ticketNotFound}
+  action={{ label: "Buscar otro ticket", href: "#ticket-search", icon: Search }}
+/>
+<EmptyState
+  {...emptyStatePresets.inboxClear}
+  variant="plain"
+  secondaryAction={{ label: "Refrescar datos", onClick: refreshData }}
+/>
+```
+
+Import presets from `@/components/common/emptyStatePresets` and `EmptyState` from `@/components/common/EmptyState`. Render callback-based usages within a Client Component; static and link-only compositions may be rendered from synchronous Server Components. Keep the icon component and its preset in the same rendering environment rather than passing function-valued icons across a server/client boundary.
+
+Each instance connects its heading and description through unique IDs. Icons are decorative, actions have visible Spanish labels, and the component does not create an alert/live region by default. The showcase puts announcements in separate status regions, demonstrates link navigation to a focused ticket field, and refreshes a simulated inbox without API calls or storage.
