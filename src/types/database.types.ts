@@ -48,18 +48,30 @@ export interface Database {
       admins: {
         Row: {
           id: string;
+          email: string;
           full_name: string;
+          role: string;
+          is_active: boolean;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
-          id: string;
+          id?: string;
+          email: string;
           full_name: string;
+          role?: string;
+          is_active?: boolean;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
+          email?: string;
           full_name?: string;
+          role?: string;
+          is_active?: boolean;
           created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -104,7 +116,12 @@ export interface Database {
       };
     };
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    Functions: {
+      is_admin: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean;
+      };
+    };
     Enums: {
       shift_type: "breakfast" | "lunch" | "dinner";
       suggestion_category: "menu" | "hygiene" | "portion" | "service" | "infrastructure";
@@ -125,6 +142,10 @@ export type TicketStatus = Database["public"]["Enums"]["ticket_status"];
 export type SuggestionRow = Database["public"]["Tables"]["suggestions"]["Row"];
 export type SuggestionInsert = Database["public"]["Tables"]["suggestions"]["Insert"];
 export type SuggestionUpdate = Database["public"]["Tables"]["suggestions"]["Update"];
+
+export type AdminRow = Database["public"]["Tables"]["admins"]["Row"];
+export type AdminInsert = Database["public"]["Tables"]["admins"]["Insert"];
+export type AdminUpdate = Database["public"]["Tables"]["admins"]["Update"];
 
 /** @deprecated Use ShiftType instead */
 export type MealShift = ShiftType;

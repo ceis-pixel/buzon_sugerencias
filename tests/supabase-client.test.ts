@@ -54,4 +54,15 @@ it("infers selected rows and rejects invalid table names and mutation payloads",
   client.from("suggestions").update({ status: "closed" });
   // @ts-expect-error Response ownership and content must be supplied.
   client.from("ticket_responses").insert({ message: "Gracias por tu sugerencia." });
+
+  const adminQuery = client.from("admins").select("id, email, is_active");
+  expectTypeOf(adminQuery).not.toBeAny();
+  expectTypeOf<QueryData<typeof adminQuery>>().toEqualTypeOf<
+    Array<Pick<Database["public"]["Tables"]["admins"]["Row"], "id" | "email" | "is_active">>
+  >();
+
+  const isAdminRpc = client.rpc("is_admin");
+  expectTypeOf(isAdminRpc).not.toBeAny();
+  // @ts-expect-error Unknown RPC functions must not be accepted.
+  client.rpc("unknown_function");
 });
