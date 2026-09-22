@@ -1,82 +1,33 @@
 "use client";
 
-import { LogIn, ShieldAlert } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 
-import { AlertBanner } from "@/components/common/AlertBanner";
-import { Button } from "@/components/common/Button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/common/Card";
+import { AuthErrorNotice } from "@/components/auth/AuthErrorNotice";
+import { LoginCard } from "@/components/auth/LoginCard";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { getAuthErrorMessage, signInWithInstitutionalGoogle } from "@/lib/auth/authActions";
 
-function LoginForm() {
+function LoginContent() {
   const searchParams = useSearchParams();
-  const errorParam = searchParams.get("error");
-  const [isLoading, setIsLoading] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  const errorDetails = errorParam ? getAuthErrorMessage(errorParam) : null;
-
-  async function handleGoogleLogin() {
-    try {
-      setIsLoading(true);
-      setAuthError(null);
-      const next = searchParams.get("next") ?? "/";
-      const { error } = await signInWithInstitutionalGoogle(next);
-      if (error) {
-        setAuthError(error.message);
-        setIsLoading(false);
-      }
-    } catch {
-      setAuthError("No se pudo conectar con el servicio de autenticación.");
-      setIsLoading(false);
-    }
-  }
+  const next = searchParams.get("next") ?? "/";
 
   return (
-    <div className="mx-auto max-w-md space-y-6">
-      {errorDetails && (
-        <AlertBanner
-          variant={errorDetails.code === "domain_not_allowed" ? "error" : "warning"}
-          title={errorDetails.title}
-          description={errorDetails.message}
-          icon={ShieldAlert}
-        />
-      )}
+    <div className="flex min-h-[65vh] md:min-h-[72vh] w-full flex-col items-center justify-center space-y-6">
+      <div className="w-full max-w-md">
+        <AuthErrorNotice />
+      </div>
 
-      {authError && (
-        <AlertBanner
-          variant="error"
-          title="Error de conexión"
-          description={authError}
-        />
-      )}
+      <LoginCard redirectTo={next} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Acceso Estudiantil</CardTitle>
-          <CardDescription>
-            Usa tu cuenta universitaria @unsch.edu.pe para acceder al buzón de sugerencias del comedor.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button
-            fullWidth
-            size="lg"
-            variant="primary"
-            leftIcon={<LogIn />}
-            isLoading={isLoading}
-            onClick={handleGoogleLogin}
-          >
-            Iniciar sesión con Google (@unsch.edu.pe)
-          </Button>
-
-          <p className="text-center text-xs text-gray-500">
-            Tu identidad se mantendrá completamente disociada al registrar sugerencias públicas.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="text-center pt-2">
+        <Link
+          href="/seguimiento"
+          className="font-sans text-xs text-secondary underline underline-offset-4 transition-colors hover:text-primary"
+        >
+          ¿Solo quieres consultar un ticket previo? Consulta tu estado aquí
+        </Link>
+      </div>
     </div>
   );
 }
@@ -84,12 +35,18 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <PageContainer
-      title="Acceso al Comedor UNSCH"
-      subtitle="Autenticación institucional rápida y segura para la comunidad universitaria."
-      badge="Sprint 4 · Autenticación"
+      title="Acceso al Buzón"
+      subtitle="Participa en la mejora continua de nuestro comedor estudiantil."
+      badge="Comedor UNSCH · FUSCH"
     >
-      <Suspense fallback={<div className="text-center py-12 text-sm text-gray-500">Cargando formulario...</div>}>
-        <LoginForm />
+      <Suspense
+        fallback={
+          <div className="flex min-h-[60vh] items-center justify-center text-sm text-neutral-gray">
+            Cargando acceso institucional...
+          </div>
+        }
+      >
+        <LoginContent />
       </Suspense>
     </PageContainer>
   );
