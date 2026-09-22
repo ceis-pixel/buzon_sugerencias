@@ -63,6 +63,9 @@ it("infers selected rows and rejects invalid table names and mutation payloads",
 
   const isAdminRpc = client.rpc("is_admin");
   expectTypeOf(isAdminRpc).not.toBeAny();
+
+  const codeRpc = client.rpc("generate_unique_ticket_code");
+  expectTypeOf(codeRpc).not.toBeAny();
   // @ts-expect-error Unknown RPC functions must not be accepted.
   client.rpc("unknown_function");
 });

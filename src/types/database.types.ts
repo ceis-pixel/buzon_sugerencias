@@ -127,6 +127,10 @@ export interface Database {
         Args: Record<PropertyKey, never>;
         Returns: boolean;
       };
+      generate_unique_ticket_code: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
     };
     Enums: {
       shift_type: "breakfast" | "lunch" | "dinner";
