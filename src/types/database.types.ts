@@ -134,6 +134,15 @@ export interface Database {
         Args: Record<PropertyKey, never>;
         Returns: string;
       };
+      submit_anonymous_suggestion: {
+        Args: {
+          p_shift: Database["public"]["Enums"]["shift_type"];
+          p_category: Database["public"]["Enums"]["suggestion_category"];
+          p_message: string;
+          p_photo_url?: string | null;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       shift_type: "breakfast" | "lunch" | "dinner";
@@ -169,3 +178,12 @@ export type TicketResponseUpdate = Database["public"]["Tables"]["ticket_response
 
 /** @deprecated Use ShiftType instead */
 export type MealShift = ShiftType;
+
+export interface SubmittedTicketResult {
+  id: string;
+  ticket_code: string;
+  shift: ShiftType;
+  category: SuggestionCategory;
+  status: TicketStatus;
+  created_at: string;
+}

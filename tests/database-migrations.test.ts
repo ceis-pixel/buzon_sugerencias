@@ -19,8 +19,8 @@ beforeAll(async () => {
 
 afterAll(async () => { await db?.close(); });
 
-describe("Sprint 3 migration integration", () => {
-  it("applies all six migrations and leaves no self-test suggestion behind", async () => {
+describe("Sprint 3 and Sprint 4 migration integration", () => {
+  it("applies all seven migrations and leaves no self-test suggestion behind", async () => {
     expect((await db.query("SELECT id FROM public.suggestions")).rows).toEqual([]);
     const result = await db.query<{ tgname: string }>("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.suggestions'::regclass AND NOT tgisinternal ORDER BY tgname");
     expect(result.rows.map((row) => row.tgname)).toEqual(["tr_set_suggestion_defaults", "tr_set_suggestions_updated_at"]);
@@ -150,5 +150,143 @@ describe("Sprint 3 migration integration", () => {
     const before = (await db.query("SELECT id FROM public.suggestions ORDER BY id")).rows;
     await db.exec(await readFile(new URL(triggerMigration, migrationsUrl), "utf8"));
     expect((await db.query("SELECT id FROM public.suggestions ORDER BY id")).rows).toEqual(before);
+  });
+
+  describe("submit_anonymous_suggestion RPC security and identity dissociation", () => {
+    it("denies execution to the anonymous role", async () => {
+      await db.exec("SET ROLE anon");
+      try {
+        await expect(
+          db.query(
+            "SELECT public.submit_anonymous_suggestion('lunch'::public.shift_type, 'menu'::public.suggestion_category, 'Mejorar el menú del almuerzo institucional.')",
+          ),
+        ).rejects.toMatchObject({ code: "42501" });
+      } finally {
+        await db.exec("RESET ROLE");
+      }
+    });
+
+    it("rejects submission when session is missing or expired (auth.uid() is null)", async () => {
+      await db.query("SELECT set_config('request.jwt.claims', '', false)");
+      await db.exec("SET ROLE authenticated");
+      try {
+        await expect(
+          db.query(
+            "SELECT public.submit_anonymous_suggestion('lunch'::public.shift_type, 'menu'::public.suggestion_category, 'Mejorar el menú del almuerzo institucional.')",
+          ),
+        ).rejects.toThrow("Sesión no válida o expirada. Debes iniciar sesión institucional.");
+      } finally {
+        await db.exec("RESET ROLE");
+      }
+    });
+
+    it("rejects submission from non-institutional email domains", async () => {
+      await db.query("SELECT set_config('request.jwt.claims', $1, false)", [
+        JSON.stringify({
+          sub: "11111111-1111-1111-1111-111111111111",
+          email: "student@gmail.com",
+          role: "authenticated",
+        }),
+      ]);
+      await db.exec("SET ROLE authenticated");
+      try {
+        await expect(
+          db.query(
+            "SELECT public.submit_anonymous_suggestion('dinner'::public.shift_type, 'portion'::public.suggestion_category, 'Porciones adecuadas en la cena.')",
+          ),
+        ).rejects.toThrow("Acceso denegado: solo cuentas @unsch.edu.pe pueden enviar sugerencias.");
+      } finally {
+        await db.exec("RESET ROLE");
+      }
+    });
+
+    it("validates message length constraints in the database function", async () => {
+      await db.query("SELECT set_config('request.jwt.claims', $1, false)", [
+        JSON.stringify({
+          sub: "11111111-1111-1111-1111-111111111111",
+          email: "student@unsch.edu.pe",
+          role: "authenticated",
+        }),
+      ]);
+      await db.exec("SET ROLE authenticated");
+      try {
+        await expect(
+          db.query(
+            "SELECT public.submit_anonymous_suggestion('breakfast'::public.shift_type, 'hygiene'::public.suggestion_category, '   corto   ')",
+          ),
+        ).rejects.toThrow("El mensaje es demasiado corto (mínimo 10 caracteres).");
+
+        const longMessage = "a".repeat(501);
+        await expect(
+          db.query(
+            "SELECT public.submit_anonymous_suggestion('breakfast'::public.shift_type, 'hygiene'::public.suggestion_category, $1)",
+            [longMessage],
+          ),
+        ).rejects.toThrow("El mensaje excede el límite máximo de 500 caracteres.");
+      } finally {
+        await db.exec("RESET ROLE");
+      }
+    });
+
+    it("records dissociated suggestion for authenticated unsch student and triggers ticket code", async () => {
+      const studentSub = "22222222-2222-2222-2222-222222222222";
+      await db.query("SELECT set_config('request.jwt.claims', $1, false)", [
+        JSON.stringify({
+          sub: studentSub,
+          email: "alumno.regular@unsch.edu.pe",
+          role: "authenticated",
+        }),
+      ]);
+      await db.exec("SET ROLE authenticated");
+
+      let ticketResult: {
+        id: string;
+        ticket_code: string;
+        shift: string;
+        category: string;
+        status: string;
+        created_at: string;
+      };
+
+      try {
+        const { rows } = await db.query<{ result: typeof ticketResult }>(
+          "SELECT public.submit_anonymous_suggestion('lunch'::public.shift_type, 'service'::public.suggestion_category, 'Excelente atención en las mesas del comedor.', 'https://storage.supabase.co/img.webp') AS result",
+        );
+        ticketResult = rows[0].result;
+      } finally {
+        await db.exec("RESET ROLE");
+      }
+
+      expect(ticketResult.id).toBeDefined();
+      expect(ticketResult.ticket_code).toMatch(/^UNSCH-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);
+      expect(ticketResult.shift).toBe("lunch");
+      expect(ticketResult.category).toBe("service");
+      expect(ticketResult.status).toBe("pending");
+      expect(ticketResult.created_at).toBeDefined();
+
+      // Verify stored row does not contain any user identifier or email
+      const { rows: storedRows } = await db.query<Record<string, unknown>>(
+        "SELECT * FROM public.suggestions WHERE id = $1::uuid",
+        [ticketResult.id],
+      );
+      expect(storedRows).toHaveLength(1);
+      const stored = storedRows[0];
+      expect(stored.ticket_code).toBe(ticketResult.ticket_code);
+      expect(stored.photo_url).toBe("https://storage.supabase.co/img.webp");
+      expect(Object.keys(stored)).toEqual([
+        "id",
+        "ticket_code",
+        "shift",
+        "category",
+        "message",
+        "photo_url",
+        "status",
+        "created_at",
+        "updated_at",
+      ]);
+      // Ensure no studentSub or email is stored anywhere
+      expect(JSON.stringify(stored)).not.toContain(studentSub);
+      expect(JSON.stringify(stored)).not.toContain("alumno.regular@unsch.edu.pe");
+    });
   });
 });

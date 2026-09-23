@@ -66,6 +66,23 @@ it("infers selected rows and rejects invalid table names and mutation payloads",
 
   const codeRpc = client.rpc("generate_unique_ticket_code");
   expectTypeOf(codeRpc).not.toBeAny();
+
+  const submitRpc = client.rpc("submit_anonymous_suggestion", {
+    p_shift: "lunch",
+    p_category: "menu",
+    p_message: "Propuesta de mejora para el menú.",
+    p_photo_url: null,
+  });
+  expectTypeOf(submitRpc).not.toBeAny();
+
+  client.rpc("submit_anonymous_suggestion", {
+    // @ts-expect-error Invalid shift enum parameter must be rejected.
+    p_shift: "midnight_snack",
+    p_category: "menu",
+    p_message: "Propuesta de mejora.",
+  });
+
   // @ts-expect-error Unknown RPC functions must not be accepted.
   client.rpc("unknown_function");
 });
+
