@@ -13,6 +13,7 @@ export interface ImagePreviewCardProps {
   compressedSize: number;
   fileName?: string;
   onRemove: () => void;
+  disabled?: boolean;
   className?: string;
 }
 
@@ -30,6 +31,7 @@ export function ImagePreviewCard({
   compressedSize,
   fileName = "fotografia_optimizada.webp",
   onRemove,
+  disabled = false,
   className = "",
 }: ImagePreviewCardProps) {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -109,8 +111,14 @@ export function ImagePreviewCard({
         <button
           type="button"
           onClick={onRemove}
+          disabled={disabled}
           aria-label="Eliminar fotografía adjunta"
-          className="flex size-11 min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-neutral-gray transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 active:scale-95 motion-reduce:transition-none"
+          className={[
+            "flex size-11 min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-neutral-gray transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 active:scale-95 motion-reduce:transition-none",
+            disabled ? "pointer-events-none opacity-40 cursor-not-allowed" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
         >
           <Trash2 className="size-5" aria-hidden="true" />
         </button>

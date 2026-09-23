@@ -1,17 +1,29 @@
 "use client";
 
 import {
+  CloudUpload,
   Cpu,
+  ExternalLink,
   HardDriveDownload,
+  Loader2,
   Maximize2,
   Scale,
+  Trash2,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
 
+import { AlertBanner } from "@/components/common/AlertBanner";
+import { Badge } from "@/components/common/Badge";
+import { Button } from "@/components/common/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/common/Card";
 import { ImageAttachmentField } from "@/components/media/ImageAttachmentField";
 import { ImagePreviewCard } from "@/components/media/ImagePreviewCard";
+import {
+  deleteSuggestionImage,
+  uploadSuggestionImage,
+  type UploadImageResult,
+} from "@/lib/services/storageService";
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return "0 B";
@@ -28,13 +40,73 @@ export function ImageUploadShowcase() {
   // Standalone preview card demo state
   const [showStandaloneDemo, setShowStandaloneDemo] = useState(true);
 
+  // Storage upload test state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<UploadImageResult | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletionMessage, setDeletionMessage] = useState<string | null>(null);
+
+  const handleTestUpload = async (fileToUpload?: File) => {
+    setIsUploading(true);
+    setUploadError(null);
+    setDeletionMessage(null);
+
+    try {
+      let targetFile: File;
+
+      if (fileToUpload) {
+        targetFile = fileToUpload;
+      } else {
+        // Create an optimized WebP sample file
+        const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900"><rect width="1200" height="900" fill="#5C0000"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="36" fill="white" font-weight="bold">Prueba de Subida - Comedor UNSCH</text></svg>`;
+        const blob = new Blob([svgContent], { type: "image/webp" });
+        targetFile = new File([blob], "muestra_optimizada.webp", {
+          type: "image/webp",
+          lastModified: Date.now(),
+        });
+      }
+
+      const result = await uploadSuggestionImage(targetFile);
+      setUploadResult(result);
+    } catch (err) {
+      setUploadError(
+        err instanceof Error
+          ? err.message
+          : "Error inesperado al subir la imagen al almacenamiento."
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDeleteUploaded = async () => {
+    if (!uploadResult) return;
+    setIsDeleting(true);
+    setUploadError(null);
+
+    try {
+      await deleteSuggestionImage(uploadResult.storagePath);
+      setDeletionMessage("Imagen eliminada exitosamente del bucket de almacenamiento.");
+      setUploadResult(null);
+    } catch (err) {
+      setUploadError(
+        err instanceof Error
+          ? err.message
+          : "Error al eliminar la imagen del almacenamiento."
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
         <div className="space-y-1">
           <CardTitle>Captura y Motor de Compresión de Evidencia Visual</CardTitle>
           <CardDescription>
-            Cámara móvil (`capture=&quot;environment&quot;`), compresión WebP en cliente y visor interactivo con métricas.
+            Cámara móvil (`capture=&quot;environment&quot;`), compresión WebP en cliente y pipeline de subida a Supabase Storage (`suggestion-media`).
           </CardDescription>
         </div>
       </CardHeader>
@@ -65,17 +137,128 @@ export function ImageUploadShowcase() {
 
         {/* 1. Main Unified Flow Component (ImageAttachmentField) */}
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-primary">
-            Campo interactivo integrado (`ImageAttachmentField`):
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-primary">
+              Campo interactivo integrado (`ImageAttachmentField`):
+            </h3>
+            {attachedFile && (
+              <Badge variant="secondary" size="sm">
+                Archivo listo para envío ({formatBytes(attachedFile.size)})
+              </Badge>
+            )}
+          </div>
+
           <ImageAttachmentField
             value={attachedFile}
-            onChange={(file) => setAttachedFile(file)}
-            disabled={isSimulatedDisabled}
+            onChange={(file) => {
+              setAttachedFile(file);
+              setUploadResult(null);
+              setUploadError(null);
+            }}
+            disabled={isSimulatedDisabled || isUploading}
+            isUploading={isUploading}
           />
+
+          {/* Action button to test uploading the attached file */}
+          {attachedFile && !uploadResult && (
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                isLoading={isUploading}
+                leftIcon={<CloudUpload className="size-4" />}
+                onClick={() => handleTestUpload(attachedFile)}
+              >
+                Simular envío y subida de evidencia a Supabase Storage
+              </Button>
+            </div>
+          )}
         </div>
 
-        {/* 2. Standalone Demo Card for Direct Inspection */}
+        {/* 2. Storage Upload Test Pipeline Results */}
+        {(uploadResult || uploadError || deletionMessage || isUploading) && (
+          <div className="rounded-2xl border border-secondary/20 bg-secondary/5 p-4 sm:p-5 space-y-3 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CloudUpload className="size-5 text-primary" />
+                <h4 className="text-sm font-bold text-gray-900">
+                  Estado del Pipeline de Almacenamiento (Supabase Storage)
+                </h4>
+              </div>
+              {uploadResult && (
+                <Badge variant="success" size="sm">
+                  Subida exitosa
+                </Badge>
+              )}
+            </div>
+
+            {isUploading && (
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Transfiriendo archivo con cabeceras de caché CDN y ruta particionada...</span>
+              </div>
+            )}
+
+            {uploadError && (
+              <AlertBanner
+                variant="error"
+                title="Error en el pipeline de almacenamiento"
+                description={uploadError}
+                onClose={() => setUploadError(null)}
+              />
+            )}
+
+            {deletionMessage && (
+              <AlertBanner
+                variant="info"
+                title="Operación completada"
+                description={deletionMessage}
+                onClose={() => setDeletionMessage(null)}
+              />
+            )}
+
+            {uploadResult && (
+              <div className="space-y-2 pt-1 text-xs">
+                <div>
+                  <span className="font-semibold text-gray-700">Ruta particionada (UUID):</span>{" "}
+                  <code className="rounded bg-white px-2 py-0.5 font-mono text-primary border border-secondary/20">
+                    {uploadResult.storagePath}
+                  </code>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-gray-700">URL pública CDN:</span>
+                  <a
+                    href={uploadResult.publicUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-primary underline underline-offset-2 hover:opacity-80"
+                  >
+                    <span>Abrir en nueva pestaña</span>
+                    <ExternalLink className="size-3" />
+                  </a>
+                </div>
+
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    isLoading={isDeleting}
+                    leftIcon={<Trash2 className="size-3.5 text-primary" />}
+                    onClick={handleDeleteUploaded}
+                    className="border border-primary/20 text-primary hover:bg-primary/10"
+                  >
+                    Eliminar imagen del bucket (`deleteSuggestionImage`)
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. Standalone Demo Card for Direct Inspection */}
         {showStandaloneDemo && (
           <div className="space-y-2 border-t border-secondary/15 pt-5">
             <div className="flex items-center justify-between">

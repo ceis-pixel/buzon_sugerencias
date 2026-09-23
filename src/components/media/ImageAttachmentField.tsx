@@ -12,6 +12,7 @@ export interface ImageAttachmentFieldProps {
   value?: File | null;
   onChange?: (file: File | null) => void;
   disabled?: boolean;
+  isUploading?: boolean;
   className?: string;
 }
 
@@ -24,6 +25,7 @@ export interface ImageAttachmentFieldProps {
 export function ImageAttachmentField({
   onChange,
   disabled = false,
+  isUploading = false,
   className = "",
 }: ImageAttachmentFieldProps) {
   const {
@@ -90,6 +92,7 @@ export function ImageAttachmentField({
           compressedSize={result.compressedSize}
           fileName={result.file.name}
           onRemove={handleRemove}
+          disabled={disabled || isUploading}
         />
       )}
 
@@ -97,7 +100,7 @@ export function ImageAttachmentField({
       {!result && !isCompressing && (
         <ImageUploadTrigger
           onFileSelected={handleFileSelected}
-          disabled={disabled}
+          disabled={disabled || isUploading}
         />
       )}
     </div>
