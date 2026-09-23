@@ -68,6 +68,22 @@ export function mapSuggestionError(error: unknown): string {
     return "Acceso denegado: solo cuentas institucionales @unsch.edu.pe pueden enviar sugerencias.";
   }
 
+  if (
+    message.includes("Has alcanzado el límite de 2 reportes") ||
+    message.includes("límite de 2 reportes")
+  ) {
+    let shiftText = "este turno";
+    if (message.includes("breakfast") || message.includes("desayuno")) {
+      shiftText = "el turno de desayuno";
+    } else if (message.includes("lunch") || message.includes("almuerzo")) {
+      shiftText = "el turno de almuerzo";
+    } else if (message.includes("dinner") || message.includes("cena")) {
+      shiftText = "el turno de cena";
+    }
+
+    return `Has alcanzado el límite de 2 reportes para ${shiftText}. Podrás enviar otra observación en el siguiente turno del comedor universitario para cuidar la estabilidad del buzón.`;
+  }
+
   if (message.includes("demasiado corto")) {
     return "El mensaje es demasiado corto (mínimo 10 caracteres).";
   }

@@ -20,7 +20,7 @@ beforeAll(async () => {
 afterAll(async () => { await db?.close(); });
 
 describe("Sprint 3 and Sprint 4 migration integration", () => {
-  it("applies all seven migrations and leaves no self-test suggestion behind", async () => {
+  it("applies all migrations and leaves no self-test suggestion behind", async () => {
     expect((await db.query("SELECT id FROM public.suggestions")).rows).toEqual([]);
     const result = await db.query<{ tgname: string }>("SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.suggestions'::regclass AND NOT tgisinternal ORDER BY tgname");
     expect(result.rows.map((row) => row.tgname)).toEqual(["tr_set_suggestion_defaults", "tr_set_suggestions_updated_at"]);
@@ -287,6 +287,121 @@ describe("Sprint 3 and Sprint 4 migration integration", () => {
       // Ensure no studentSub or email is stored anywhere
       expect(JSON.stringify(stored)).not.toContain(studentSub);
       expect(JSON.stringify(stored)).not.toContain("alumno.regular@unsch.edu.pe");
+    });
+  });
+
+  describe("ephemeral salted hash rate limiting and anti-spam quota enforcement", () => {
+    it("protects submission_rate_limits table with RLS and denies direct access to anon and authenticated", async () => {
+      const { rows: rlsRows } = await db.query<{ relrowsecurity: boolean }>(
+        "SELECT relrowsecurity FROM pg_class WHERE relname = 'submission_rate_limits'",
+      );
+      expect(rlsRows[0]?.relrowsecurity).toBe(true);
+
+      await db.exec("SET ROLE anon");
+      try {
+        await expect(db.query("SELECT * FROM public.submission_rate_limits")).rejects.toMatchObject({
+          code: "42501",
+        });
+      } finally {
+        await db.exec("RESET ROLE");
+      }
+
+      await db.exec("SET ROLE authenticated");
+      try {
+        await expect(db.query("SELECT * FROM public.submission_rate_limits")).rejects.toMatchObject({
+          code: "42501",
+        });
+      } finally {
+        await db.exec("RESET ROLE");
+      }
+    });
+
+    it("enforces max 2 submissions per shift per student per day, allows another shift, and keeps zero-knowledge anonymity", async () => {
+      const studentSub = "33333333-3333-3333-3333-333333333333";
+      const studentEmail = "estudiante.activo@unsch.edu.pe";
+
+      await db.query("SELECT set_config('request.jwt.claims', $1, false)", [
+        JSON.stringify({
+          sub: studentSub,
+          email: studentEmail,
+          role: "authenticated",
+        }),
+      ]);
+      await db.exec("SET ROLE authenticated");
+
+      try {
+        // Intento 1 (lunch): Exitoso
+        const { rows: res1 } = await db.query<{ result: { ticket_code: string; shift: string } }>(
+          "SELECT public.submit_anonymous_suggestion('lunch'::public.shift_type, 'menu'::public.suggestion_category, 'Primer reporte válido para el almuerzo.') AS result",
+        );
+        expect(res1[0].result.ticket_code).toMatch(/^UNSCH-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);
+        expect(res1[0].result.shift).toBe("lunch");
+
+        // Intento 2 (lunch): Exitoso
+        const { rows: res2 } = await db.query<{ result: { ticket_code: string; shift: string } }>(
+          "SELECT public.submit_anonymous_suggestion('lunch'::public.shift_type, 'service'::public.suggestion_category, 'Segundo reporte válido para el almuerzo.') AS result",
+        );
+        expect(res2[0].result.ticket_code).toMatch(/^UNSCH-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);
+        expect(res2[0].result.shift).toBe("lunch");
+
+        // Intento 3 (lunch): Falla con la excepción de límite alcanzado
+        await expect(
+          db.query(
+            "SELECT public.submit_anonymous_suggestion('lunch'::public.shift_type, 'portion'::public.suggestion_category, 'Tercer reporte excediendo la cuota permitida.')",
+          ),
+        ).rejects.toThrow(
+          "Has alcanzado el límite de 2 reportes para este turno (lunch). Podrás enviar otra observación en el siguiente turno.",
+        );
+
+        // Intento en turno distinto (dinner): Exitoso
+        const { rows: resDinner } = await db.query<{ result: { ticket_code: string; shift: string } }>(
+          "SELECT public.submit_anonymous_suggestion('dinner'::public.shift_type, 'hygiene'::public.suggestion_category, 'Reporte de la cena en turno independiente.') AS result",
+        );
+        expect(resDinner[0].result.ticket_code).toMatch(/^UNSCH-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);
+        expect(resDinner[0].result.shift).toBe("dinner");
+      } finally {
+        await db.exec("RESET ROLE");
+      }
+
+      // Verificación de cuota independiente para otro estudiante (estudiante 2)
+      const otherStudentSub = "44444444-4444-4444-4444-444444444444";
+      await db.query("SELECT set_config('request.jwt.claims', $1, false)", [
+        JSON.stringify({
+          sub: otherStudentSub,
+          email: "otro.alumno@unsch.edu.pe",
+          role: "authenticated",
+        }),
+      ]);
+      await db.exec("SET ROLE authenticated");
+
+      try {
+        const { rows: resOther } = await db.query<{ result: { ticket_code: string; shift: string } }>(
+          "SELECT public.submit_anonymous_suggestion('lunch'::public.shift_type, 'menu'::public.suggestion_category, 'Reporte de otro alumno en el turno de almuerzo.') AS result",
+        );
+        expect(resOther[0].result.ticket_code).toMatch(/^UNSCH-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);
+      } finally {
+        await db.exec("RESET ROLE");
+      }
+
+      // Verificación criptográfica y de anonimato en submission_rate_limits
+      const { rows: rateLimits } = await db.query<{
+        rate_hash: string;
+        shift: string;
+        submission_count: number;
+      }>("SELECT rate_hash, shift, submission_count FROM public.submission_rate_limits ORDER BY shift, submission_count");
+
+      expect(rateLimits.length).toBeGreaterThanOrEqual(3);
+      for (const row of rateLimits) {
+        expect(row.rate_hash).toMatch(/^[a-f0-9]{64}$/);
+        // Verificar que no se expone ningún ID ni correo de estudiante en la tabla
+        expect(row.rate_hash).not.toContain(studentSub);
+        expect(row.rate_hash).not.toContain(studentEmail);
+        expect(row.rate_hash).not.toContain(otherStudentSub);
+      }
+
+      // Verificar que los hashes para lunch de dos estudiantes distintos sean diferentes
+      const lunchHashes = rateLimits.filter((r) => r.shift === "lunch").map((r) => r.rate_hash);
+      expect(new Set(lunchHashes).size).toBe(lunchHashes.length);
     });
   });
 });

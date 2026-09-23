@@ -173,6 +173,38 @@ describe("Error Mapping (mapSuggestionError)", () => {
     ).toBe("No tienes permisos suficientes para registrar sugerencias. Inicia sesión institucional.");
   });
 
+  it("maps rate limit quota errors to didactic shift-aware Peruvian Spanish advice", () => {
+    expect(
+      mapSuggestionError(
+        new Error(
+          "Has alcanzado el límite de 2 reportes para este turno (lunch). Podrás enviar otra observación en el siguiente turno.",
+        ),
+      ),
+    ).toBe(
+      "Has alcanzado el límite de 2 reportes para el turno de almuerzo. Podrás enviar otra observación en el siguiente turno del comedor universitario para cuidar la estabilidad del buzón.",
+    );
+
+    expect(
+      mapSuggestionError(
+        new Error(
+          "Has alcanzado el límite de 2 reportes para este turno (breakfast). Podrás enviar otra observación en el siguiente turno.",
+        ),
+      ),
+    ).toBe(
+      "Has alcanzado el límite de 2 reportes para el turno de desayuno. Podrás enviar otra observación en el siguiente turno del comedor universitario para cuidar la estabilidad del buzón.",
+    );
+
+    expect(
+      mapSuggestionError(
+        new Error(
+          "Has alcanzado el límite de 2 reportes para este turno (dinner). Podrás enviar otra observación en el siguiente turno.",
+        ),
+      ),
+    ).toBe(
+      "Has alcanzado el límite de 2 reportes para el turno de cena. Podrás enviar otra observación en el siguiente turno del comedor universitario para cuidar la estabilidad del buzón.",
+    );
+  });
+
   it("handles fallback and null errors safely", () => {
     expect(mapSuggestionError(null)).toBe(
       "Ocurrió un error inesperado al registrar tu sugerencia.",
@@ -288,6 +320,31 @@ describe("Server Action: submitSuggestion", () => {
     expect(result.data).toBeNull();
     expect(result.error).toBe(
       "Tu sesión no es válida o ha expirado. Por favor, inicia sesión con tu correo institucional @unsch.edu.pe.",
+    );
+  });
+
+  it("handles rate limit RPC errors and returns didactic Peruvian Spanish explanation", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: {
+        message:
+          "Has alcanzado el límite de 2 reportes para este turno (lunch). Podrás enviar otra observación en el siguiente turno.",
+      },
+    });
+
+    const result = await submitSuggestion(
+      {
+        shift: "lunch",
+        category: "menu",
+        message: "Tercer intento en el mismo turno de almuerzo.",
+      },
+      { supabase: mockClient },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.data).toBeNull();
+    expect(result.error).toBe(
+      "Has alcanzado el límite de 2 reportes para el turno de almuerzo. Podrás enviar otra observación en el siguiente turno del comedor universitario para cuidar la estabilidad del buzón.",
     );
   });
 });

@@ -123,6 +123,36 @@ export interface Database {
           },
         ];
       };
+      submission_rate_limits: {
+        Row: {
+          id: string;
+          rate_hash: string;
+          shift: Database["public"]["Enums"]["shift_type"];
+          submission_date: string;
+          submission_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          rate_hash: string;
+          shift: Database["public"]["Enums"]["shift_type"];
+          submission_date?: string;
+          submission_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          rate_hash?: string;
+          shift?: Database["public"]["Enums"]["shift_type"];
+          submission_date?: string;
+          submission_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -175,6 +205,10 @@ export type TicketResponse = Database["public"]["Tables"]["ticket_responses"]["R
 export type TicketResponseRow = Database["public"]["Tables"]["ticket_responses"]["Row"];
 export type TicketResponseInsert = Database["public"]["Tables"]["ticket_responses"]["Insert"];
 export type TicketResponseUpdate = Database["public"]["Tables"]["ticket_responses"]["Update"];
+
+export type SubmissionRateLimitRow = Database["public"]["Tables"]["submission_rate_limits"]["Row"];
+export type SubmissionRateLimitInsert = Database["public"]["Tables"]["submission_rate_limits"]["Insert"];
+export type SubmissionRateLimitUpdate = Database["public"]["Tables"]["submission_rate_limits"]["Update"];
 
 /** @deprecated Use ShiftType instead */
 export type MealShift = ShiftType;
