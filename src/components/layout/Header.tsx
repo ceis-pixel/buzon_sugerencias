@@ -1,6 +1,7 @@
 import { Search, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 
+import { HeaderLogoutButton } from "@/components/layout/HeaderLogoutButton";
 import { siteConfig } from "@/lib/site-config";
 
 export function Header() {
@@ -37,6 +38,7 @@ export function Header() {
           >
             <Search aria-hidden="true" className="size-5" />
           </Link>
+          <HeaderLogoutButton />
         </div>
       </div>
     </header>
