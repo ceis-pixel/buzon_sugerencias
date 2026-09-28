@@ -24,3 +24,16 @@ export function isValidTicketCode(code: string): boolean {
   }
   return TICKET_CODE_REGEX.test(normalizeTicketCode(code));
 }
+
+/**
+ * Generates a valid pseudo-random UNSCH ticket code (e.g. UNSCH-K72M)
+ * conforming to TICKET_CODE_REGEX.
+ */
+export function generateDemoTicketCode(): string {
+  const chars = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+  let suffix = "";
+  for (let i = 0; i < 4; i++) {
+    suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `UNSCH-${suffix}`;
+}
