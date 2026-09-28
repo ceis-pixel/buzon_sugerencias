@@ -1,11 +1,12 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AlertBanner } from "@/components/common/AlertBanner";
 import { ImagePreviewCard } from "@/components/media/ImagePreviewCard";
 import { ImageUploadTrigger } from "@/components/media/ImageUploadTrigger";
+import { UploadFallbackModal } from "@/components/media/UploadFallbackModal";
 import { UploadProgressCard } from "@/components/media/UploadProgressCard";
 import { useImageCompressor } from "@/lib/hooks/useImageCompressor";
 import type { UploadStatus } from "@/lib/hooks/useResilientUpload";
@@ -18,8 +19,12 @@ export interface ImageAttachmentFieldProps {
   uploadProgress?: number;
   uploadStatus?: UploadStatus;
   uploadError?: string | null;
+  /** Number of upload attempts made so far (drives auto-fallback trigger). */
+  uploadAttempts?: number;
   onRetryUpload?: () => void;
   onCancelUpload?: () => void;
+  /** Called when the student explicitly chooses to discard the photo. */
+  onDiscardPhoto?: () => void;
   className?: string;
 }
 
@@ -29,6 +34,7 @@ export interface ImageAttachmentFieldProps {
  * 2. Client-side Canvas WebP compression (useImageCompressor)
  * 3. Verified preview card with lightbox and metrics (ImagePreviewCard)
  * 4. Resilient upload feedback with progress bar, retry, and cancellation (UploadProgressCard)
+ * 5. Graceful degradation modal after persistent failures (UploadFallbackModal) — Issue 5.6
  */
 export function ImageAttachmentField({
   onChange,
@@ -37,8 +43,10 @@ export function ImageAttachmentField({
   uploadProgress = 0,
   uploadStatus = "idle",
   uploadError = null,
+  uploadAttempts = 0,
   onRetryUpload,
   onCancelUpload,
+  onDiscardPhoto,
   className = "",
 }: ImageAttachmentFieldProps) {
   const {
@@ -49,8 +57,31 @@ export function ImageAttachmentField({
     clear,
   } = useImageCompressor();
 
+  // Track whether the fallback modal has been auto-triggered for this session
+  const [isFallbackOpen, setIsFallbackOpen] = useState(false);
+  const fallbackShownRef = useRef(false);
+
+  // Auto-show fallback modal after ≥2 failed attempts
+  useEffect(() => {
+    if (
+      uploadStatus === "error" &&
+      uploadAttempts >= 2 &&
+      !fallbackShownRef.current
+    ) {
+      fallbackShownRef.current = true;
+      setIsFallbackOpen(true);
+    }
+  }, [uploadStatus, uploadAttempts]);
+
+  // Reset the auto-trigger guard whenever the file is cleared or a new one is picked.
+  // We deliberately avoid calling setState inside the effect body to prevent cascading renders.
+  // Instead, derive the open state: if there's no compressed result the modal must be closed.
+  const effectiveFallbackOpen = isFallbackOpen && result !== null;
+
+
   const handleFileSelected = useCallback(
     async (file: File) => {
+      fallbackShownRef.current = false;
       const compressionResult = await compress(file);
       if (compressionResult) {
         onChange?.(compressionResult.file);
@@ -62,7 +93,22 @@ export function ImageAttachmentField({
   const handleRemove = useCallback(() => {
     clear();
     onChange?.(null);
-  }, [clear, onChange]);
+    onDiscardPhoto?.();
+    // Reset auto-trigger guard so the modal can re-arm if a new file is picked
+    fallbackShownRef.current = false;
+    setIsFallbackOpen(false);
+  }, [clear, onChange, onDiscardPhoto]);
+
+  const handleFallbackDiscard = useCallback(() => {
+    setIsFallbackOpen(false);
+    handleRemove();
+  }, [handleRemove]);
+
+  const handleFallbackRetry = useCallback(() => {
+    setIsFallbackOpen(false);
+    fallbackShownRef.current = false;
+    onRetryUpload?.();
+  }, [onRetryUpload]);
 
   const isUploadInProgress =
     isUploading ||
@@ -141,6 +187,18 @@ export function ImageAttachmentField({
           disabled={disabled}
         />
       )}
+
+      {/* 6. Graceful degradation fallback modal (Issue 5.6) */}
+      <UploadFallbackModal
+        isOpen={effectiveFallbackOpen}
+        fileName={result?.file.name}
+        attempts={uploadAttempts}
+        errorMessage={uploadError}
+        onDiscardAndContinue={handleFallbackDiscard}
+        onRetry={handleFallbackRetry}
+        onClose={() => setIsFallbackOpen(false)}
+      />
     </div>
   );
 }
+

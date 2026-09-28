@@ -16,6 +16,27 @@ export const suggestionCategories: readonly [SuggestionCategory, ...SuggestionCa
   "infrastructure",
 ];
 
+export const shiftEnum = z.enum(suggestionShifts, {
+  error: "Por favor selecciona el turno a reportar.",
+});
+
+export const categoryEnum = z.enum(suggestionCategories, {
+  error: "Debes elegir una categoría para clasificar tu observación.",
+});
+
+export const suggestionFormSchema = z.object({
+  shift: shiftEnum,
+  category: categoryEnum,
+  message: z
+    .string({ error: "Escribe tu observación o sugerencia." })
+    .trim()
+    .min(10, "Tu mensaje debe tener al menos 10 caracteres para entender el caso.")
+    .max(500, "El mensaje no puede exceder los 500 caracteres."),
+  mediaFile: z.instanceof(File).nullable().optional(),
+});
+
+export type SuggestionFormValues = z.infer<typeof suggestionFormSchema>;
+
 export const submitSuggestionSchema = z.object({
   shift: z.enum(suggestionShifts, {
     error: "Debes seleccionar un turno válido (desayuno, almuerzo o cena).",

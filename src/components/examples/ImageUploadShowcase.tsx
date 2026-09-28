@@ -8,6 +8,7 @@ import {
   Maximize2,
   Scale,
   Trash2,
+  WifiOff,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
@@ -18,6 +19,7 @@ import { Button } from "@/components/common/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/common/Card";
 import { ImageAttachmentField } from "@/components/media/ImageAttachmentField";
 import { ImagePreviewCard } from "@/components/media/ImagePreviewCard";
+import { UploadFallbackModal } from "@/components/media/UploadFallbackModal";
 import { UploadProgressCard } from "@/components/media/UploadProgressCard";
 import { useResilientUpload } from "@/lib/hooks/useResilientUpload";
 import { deleteSuggestionImage } from "@/lib/services/storageService";
@@ -33,9 +35,13 @@ function formatBytes(bytes: number): string {
 export function ImageUploadShowcase() {
   const [isSimulatedDisabled, setIsSimulatedDisabled] = useState(false);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [uploadAttempts, setUploadAttempts] = useState(0);
 
   // Standalone previews demo state
   const [showStandaloneDemos, setShowStandaloneDemos] = useState(true);
+
+  // Issue 5.6 standalone fallback modal demo state
+  const [isFallbackDemoOpen, setIsFallbackDemoOpen] = useState(false);
 
   // Resilient upload hook
   const {
@@ -56,6 +62,7 @@ export function ImageUploadShowcase() {
   const handleStartUpload = async () => {
     if (!attachedFile) return;
     setDeletionMessage(null);
+    setUploadAttempts((n) => n + 1);
     await startUpload(attachedFile);
   };
 
@@ -126,15 +133,24 @@ export function ImageUploadShowcase() {
             value={attachedFile}
             onChange={(file) => {
               setAttachedFile(file);
+              setUploadAttempts(0);
               resetUpload();
               setDeletionMessage(null);
+            }}
+            onDiscardPhoto={() => {
+              setUploadAttempts(0);
+              resetUpload();
             }}
             disabled={isSimulatedDisabled}
             isUploading={uploadStatus === "uploading" || uploadStatus === "retrying"}
             uploadProgress={uploadProgress}
             uploadStatus={uploadStatus}
+            uploadAttempts={uploadAttempts}
             uploadError={uploadError}
-            onRetryUpload={retryUpload}
+            onRetryUpload={() => {
+              setUploadAttempts((n) => n + 1);
+              retryUpload();
+            }}
             onCancelUpload={cancelUpload}
           />
 
@@ -302,6 +318,37 @@ export function ImageUploadShowcase() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Issue 5.6: Standalone fallback modal demo */}
+        {showStandaloneDemos && (
+          <div className="space-y-3 border-t border-secondary/15 pt-5">
+            <h3 className="text-sm font-semibold text-primary">
+              Demostración de `UploadFallbackModal` — Degradación Elegante (Issue 5.6):
+            </h3>
+            <p className="text-xs text-neutral-gray leading-relaxed">
+              Se activa automáticamente tras ≥ 2 intentos fallidos. Permite descartar la foto y enviar solo el texto, o volver a intentar la subida.
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              leftIcon={<WifiOff className="size-4 text-amber-600" />}
+              onClick={() => setIsFallbackDemoOpen(true)}
+              className="border border-amber-300 text-amber-700 hover:bg-amber-50"
+            >
+              Simular fallo persistente de red (2 intentos)
+            </Button>
+            <UploadFallbackModal
+              isOpen={isFallbackDemoOpen}
+              fileName="foto_bandeja_almuerzo.webp"
+              attempts={2}
+              errorMessage="La señal móvil es inestable. No pudimos completar la subida tras 15 segundos de espera."
+              onDiscardAndContinue={() => setIsFallbackDemoOpen(false)}
+              onRetry={() => setIsFallbackDemoOpen(false)}
+              onClose={() => setIsFallbackDemoOpen(false)}
+            />
           </div>
         )}
       </CardContent>
