@@ -6,16 +6,18 @@ import { CardModalShowcase } from "@/components/examples/CardModalShowcase";
 import { EmptyStateShowcase } from "@/components/examples/EmptyStateShowcase";
 import { FormFieldsShowcase } from "@/components/examples/FormFieldsShowcase";
 import { ImageUploadShowcase } from "@/components/examples/ImageUploadShowcase";
+import { SuggestionFormShowcase } from "@/components/examples/SuggestionFormShowcase";
 import { PageContainer } from "@/components/layout/PageContainer";
 
 export default function HomePage() {
   return (
     <PageContainer
       title="Biblioteca de componentes"
-      subtitle="Botones, campos, indicadores y mensajes para una experiencia clara y cercana."
-      badge="Sprint 5 · Compresión de imágenes y multimedia"
+      subtitle="Botones, campos, indicadores y selectores para una experiencia clara y cercana."
+      badge="Sprint 6 · Selector inteligente de turno y selector de categoría en chips"
     >
       <div className="space-y-8">
+        <SuggestionFormShowcase />
         <ImageUploadShowcase />
         <AuthShowcase />
         <AlertBannerShowcase />
