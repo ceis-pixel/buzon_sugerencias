@@ -129,6 +129,39 @@ describe("Sprint 3 and Sprint 4 migration integration", () => {
     await db.exec("UPDATE public.admins SET is_active = true WHERE email = 'salud.fusch@unsch.edu.pe'");
   });
 
+  it("allows active admins to read and update suggestions while denying unlisted users", async () => {
+    // Active admin credentials
+    await db.query("SELECT set_config('request.jwt.claims', $1, false)", [
+      JSON.stringify({ email: "salud.fusch@unsch.edu.pe", role: "authenticated" }),
+    ]);
+    await db.exec("SET ROLE authenticated");
+    try {
+      const suggestions = (await db.query("SELECT * FROM public.suggestions WHERE ticket_code = 'UNSCH-TEST'")).rows;
+      expect(suggestions.length).toBe(1);
+      const updateResult = await db.query(
+        "UPDATE public.suggestions SET status = 'in_review' WHERE ticket_code = 'UNSCH-TEST' RETURNING status",
+      );
+      expect(updateResult.rows[0]).toEqual({ status: "in_review" });
+    } finally {
+      await db.exec("RESET ROLE");
+    }
+
+    // Unlisted student credentials
+    await db.query("SELECT set_config('request.jwt.claims', $1, false)", [
+      JSON.stringify({ email: "student@unsch.edu.pe", role: "authenticated" }),
+    ]);
+    await db.exec("SET ROLE authenticated");
+    try {
+      expect((await db.query("SELECT * FROM public.suggestions")).rows).toEqual([]);
+      const updateResult = await db.query(
+        "UPDATE public.suggestions SET status = 'resolved' WHERE ticket_code = 'UNSCH-TEST' RETURNING status",
+      );
+      expect(updateResult.rows).toEqual([]);
+    } finally {
+      await db.exec("RESET ROLE");
+    }
+  });
+
   it("applies storage policies to anonymous, student and admin operations", async () => {
     await db.exec("SET ROLE anon");
     try {

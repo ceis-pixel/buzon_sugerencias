@@ -18,6 +18,32 @@ export default function HomePage() {
       badge="Sprint 6 completo · Formulario con React Hook Form, Zod y contador visual"
     >
       <div className="space-y-8">
+        {/* Sprint 7 navigation banner */}
+        <section aria-labelledby="sprint7-title" className="space-y-2">
+          <h2 id="sprint7-title" className="text-lg font-semibold text-primary">
+            Sprint 7 — Módulo de seguimiento de tickets
+          </h2>
+          <a
+            href="/seguimiento"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-secondary/30 bg-secondary/10 px-4 py-2.5 text-sm font-semibold text-secondary transition-colors hover:bg-secondary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary/40"
+          >
+            Ir al módulo de seguimiento →
+          </a>
+        </section>
+
+        {/* Sprint 8 navigation banner */}
+        <section aria-labelledby="sprint8-title" className="space-y-2">
+          <h2 id="sprint8-title" className="text-lg font-semibold text-primary">
+            Sprint 8 — Panel de Moderación y Gestión FUSCH
+          </h2>
+          <a
+            href="/admin"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            Acceder al Panel Administrativo (/admin) →
+          </a>
+        </section>
+
         <section aria-labelledby="form-live-title" className="space-y-4">
           <SuggestionForm />
         </section>
