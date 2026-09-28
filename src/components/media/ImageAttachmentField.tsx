@@ -6,7 +6,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertBanner } from "@/components/common/AlertBanner";
 import { ImagePreviewCard } from "@/components/media/ImagePreviewCard";
 import { ImageUploadTrigger } from "@/components/media/ImageUploadTrigger";
-import { UploadFallbackModal } from "@/components/media/UploadFallbackModal";
+import dynamic from "next/dynamic";
+
+const UploadFallbackModal = dynamic(
+  () =>
+    import("@/components/media/UploadFallbackModal").then(
+      (mod) => mod.UploadFallbackModal
+    ),
+  { ssr: false }
+);
+
 import { UploadProgressCard } from "@/components/media/UploadProgressCard";
 import { useImageCompressor } from "@/lib/hooks/useImageCompressor";
 import type { UploadStatus } from "@/lib/hooks/useResilientUpload";

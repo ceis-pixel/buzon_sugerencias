@@ -30,7 +30,16 @@ import {
   SubmissionLoadingState,
   type SubmissionStage,
 } from "@/components/suggestion/SubmissionLoadingState";
-import { SubmissionSuccessModal } from "@/components/suggestion/SubmissionSuccessModal";
+import dynamic from "next/dynamic";
+
+const SubmissionSuccessModal = dynamic(
+  () =>
+    import("@/components/suggestion/SubmissionSuccessModal").then(
+      (mod) => mod.SubmissionSuccessModal
+    ),
+  { ssr: false }
+);
+
 import { SuggestionMessageField } from "@/components/suggestion/SuggestionMessageField";
 import { submitSuggestion } from "@/lib/actions/suggestionActions";
 import { useSuggestionDraft } from "@/lib/hooks/useSuggestionDraft";

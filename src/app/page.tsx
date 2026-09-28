@@ -44,6 +44,19 @@ export default function HomePage() {
           </a>
         </section>
 
+        {/* Sprint 9 navigation banner */}
+        <section aria-labelledby="sprint9-title" className="space-y-2">
+          <h2 id="sprint9-title" className="text-lg font-semibold text-primary">
+            Sprint 9 — Afiche Oficial con Código QR para Mesas (/qr-flyer)
+          </h2>
+          <a
+            href="/qr-flyer"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            Ver e Imprimir Afiche QR para Mesas (/qr-flyer) →
+          </a>
+        </section>
+
         <section aria-labelledby="form-live-title" className="space-y-4">
           <SuggestionForm />
         </section>

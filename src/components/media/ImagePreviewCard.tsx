@@ -5,7 +5,15 @@ import Image from "next/image";
 import { useState } from "react";
 
 import { Badge } from "@/components/common/Badge";
-import { ImageLightboxModal } from "@/components/media/ImageLightboxModal";
+import dynamic from "next/dynamic";
+
+const ImageLightboxModal = dynamic(
+  () =>
+    import("@/components/media/ImageLightboxModal").then(
+      (mod) => mod.ImageLightboxModal
+    ),
+  { ssr: false }
+);
 
 export interface ImagePreviewCardProps {
   previewUrl: string;

@@ -6,7 +6,7 @@ import { siteConfig } from "@/lib/site-config";
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur-md">
+    <header className="print:hidden sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-xl items-center justify-between gap-2 px-4 py-3">
         <Link
           href="/"

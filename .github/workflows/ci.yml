@@ -1,0 +1,49 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Typecheck, Lint, Test & Production Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: "https://mock-ci-project.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock-ci-anon-key-1234567890"
+      NEXT_PUBLIC_APP_URL: "https://buzon-comedor.unsch.edu.pe"
+      NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN: "unsch.edu.pe"
+      CI: "true"
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Clean Dependency Installation (npm ci)
+        run: npm ci
+
+      - name: TypeScript Type Checking (npm run typecheck)
+        run: npm run typecheck
+
+      - name: ESLint Code Quality Inspection (npm run lint)
+        run: npm run lint
+
+      - name: Automated Unit & Integration Tests (npm run test)
+        run: npm run test
+
+      - name: Production Bundle Compilation (npm run build)
+        run: npm run build

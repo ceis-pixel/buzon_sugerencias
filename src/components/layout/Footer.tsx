@@ -2,7 +2,7 @@ import { ShieldCheck } from "lucide-react";
 
 export function Footer() {
   return (
-    <footer className="border-t border-gray-100 bg-white/60">
+    <footer className="print:hidden border-t border-gray-100 bg-white/60">
       <div className="mx-auto w-full max-w-xl px-4 py-6 text-center text-xs leading-6 text-neutral-gray">
         <ShieldCheck aria-hidden="true" className="mx-auto mb-2 size-5 text-secondary" />
         <p>

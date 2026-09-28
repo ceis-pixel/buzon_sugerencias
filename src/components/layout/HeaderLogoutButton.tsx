@@ -3,7 +3,13 @@
 import { LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { LogoutModal } from "@/components/auth/LogoutModal";
+import dynamic from "next/dynamic";
+
+const LogoutModal = dynamic(
+  () => import("@/components/auth/LogoutModal").then((mod) => mod.LogoutModal),
+  { ssr: false }
+);
+
 import { createClient } from "@/lib/supabase/client";
 
 /**
