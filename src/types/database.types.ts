@@ -173,6 +173,12 @@ export interface Database {
         };
         Returns: Json;
       };
+      purge_orphaned_or_old_media: {
+        Args: {
+          p_days_old?: number;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       shift_type: "breakfast" | "lunch" | "dinner";

@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/server";
+import { sendCriticalAlertWebhook } from "@/lib/services/alertWebhook";
 import {
   mapSuggestionError,
   submitSuggestionSchema,
@@ -69,9 +70,26 @@ export async function submitSuggestion(
       };
     }
 
+    const submitted = data as unknown as SubmittedTicketResult;
+
+    // Issue 10.2: Trigger automated webhook alert for critical cases (fault-tolerant & non-blocking)
+    try {
+      sendCriticalAlertWebhook({
+        ticketCode: submitted.ticket_code,
+        shift: submitted.shift,
+        category: submitted.category,
+        message: validation.data.message,
+        photoUrl,
+      }).catch((webhookErr) => {
+        console.error("[submitSuggestion] Webhook non-blocking error:", webhookErr);
+      });
+    } catch (webhookErr) {
+      console.error("[submitSuggestion] Webhook dispatch exception:", webhookErr);
+    }
+
     return {
       success: true,
-      data: data as unknown as SubmittedTicketResult,
+      data: submitted,
       error: null,
     };
   } catch (err) {

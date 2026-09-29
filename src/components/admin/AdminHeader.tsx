@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   ExternalLink,
+  Inbox,
   LogOut,
   User,
   UtensilsCrossed,
@@ -18,23 +21,28 @@ export interface AdminHeaderProps {
 }
 
 /**
- * Issue 8.2 — AdminHeader (Client Component)
+ * Issue 8.2 & 10.1 — AdminHeader (Client Component)
  *
  * Top navigation bar exclusive for FUSCH evaluators and administrators:
  * - Brand monogram with institutional badge: "Comedor UNSCH • Panel de Gestión FUSCH".
+ * - Internal navigation tabs: "Bandeja" (/admin) and "Analítica de Impacto" (/admin/analitica).
  * - Identity pill with administrator name and role badge.
  * - Quick link to public portal.
  * - Secure logout action with LogoutModal.
  */
 export function AdminHeader({ admin }: AdminHeaderProps) {
   const [isLogoutOpen, setIsLogoutOpen] = useState(false);
+  const pathname = usePathname();
+
+  const isAnalitica = pathname.startsWith("/admin/analitica");
+  const isInbox = pathname === "/admin";
 
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-neutral-gray/20 bg-white/95 backdrop-blur-md shadow-xs">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
           {/* Brand & Monogram */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 sm:gap-6">
             <Link
               href="/admin"
               className="flex items-center gap-2.5 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
@@ -53,10 +61,61 @@ export function AdminHeader({ admin }: AdminHeaderProps) {
                 </span>
               </div>
             </Link>
+
+            {/* Admin Nav Tabs */}
+            <nav
+              aria-label="Navegación del panel"
+              className="hidden sm:flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-neutral-gray/15"
+            >
+              <Link
+                href="/admin"
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  isInbox
+                    ? "bg-white text-primary shadow-xs"
+                    : "text-neutral-gray hover:text-gray-900 hover:bg-slate-200/50"
+                }`}
+              >
+                <Inbox className="h-3.5 w-3.5" />
+                <span>Bandeja</span>
+              </Link>
+              <Link
+                href="/admin/analitica"
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  isAnalitica
+                    ? "bg-white text-primary shadow-xs"
+                    : "text-neutral-gray hover:text-gray-900 hover:bg-slate-200/50"
+                }`}
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+                <span>Analítica de Impacto</span>
+              </Link>
+            </nav>
           </div>
 
           {/* User profile & controls */}
           <div className="flex items-center gap-2 sm:gap-4">
+            {/* Mobile Tab Toggle */}
+            <div className="sm:hidden flex items-center gap-1">
+              <Link
+                href="/admin"
+                className={`p-2 rounded-xl text-xs font-semibold ${
+                  isInbox ? "bg-primary/10 text-primary" : "text-neutral-gray"
+                }`}
+                title="Bandeja de moderación"
+              >
+                <Inbox className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/admin/analitica"
+                className={`p-2 rounded-xl text-xs font-semibold ${
+                  isAnalitica ? "bg-primary/10 text-primary" : "text-neutral-gray"
+                }`}
+                title="Analítica de impacto"
+              >
+                <BarChart3 className="h-4 w-4" />
+              </Link>
+            </div>
+
             {/* Link to public portal */}
             <Link
               href="/"
@@ -93,7 +152,7 @@ export function AdminHeader({ admin }: AdminHeaderProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setIsLogoutOpen(true)}
+              onClick={() => setIsLogoutOpen(false || true)}
               leftIcon={<LogOut className="h-4 w-4" />}
               className="text-neutral-gray hover:text-primary hover:bg-primary/5"
               aria-label="Cerrar sesión institucional"

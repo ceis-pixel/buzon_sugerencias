@@ -57,6 +57,27 @@ export default function HomePage() {
           </a>
         </section>
 
+        {/* Sprint 10 navigation banner */}
+        <section aria-labelledby="sprint10-title" className="space-y-2">
+          <h2 id="sprint10-title" className="text-lg font-semibold text-primary">
+            Sprint 10 — Transparencia Pública y Centro de Ayuda
+          </h2>
+          <div className="flex flex-wrap gap-2.5">
+            <a
+              href="/transparencia"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              Mural de Transparencia Pública (/transparencia) →
+            </a>
+            <a
+              href="/preguntas-frecuentes"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-neutral-gray/30 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-gray-800 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              Preguntas Frecuentes (/preguntas-frecuentes) →
+            </a>
+          </div>
+        </section>
+
         <section aria-labelledby="form-live-title" className="space-y-4">
           <SuggestionForm />
         </section>

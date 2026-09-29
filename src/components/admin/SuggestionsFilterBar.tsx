@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   FileSpreadsheet,
   RefreshCw,
@@ -33,10 +34,10 @@ export interface SuggestionsFilterBarProps {
 }
 
 /**
- * Issue 8.3 & 8.6 — SuggestionsFilterBar
+ * Issue 8.3 & 10.3 — SuggestionsFilterBar
  *
  * Multi-dimensional filter bar for administrative moderation:
- * - Search by ticket code or keyword.
+ * - Search by ticket code or keyword with 300 ms debounce.
  * - Shift selector (Todos, Desayuno, Almuerzo, Cena).
  * - Category selector (Todas, Menú, Higiene, Porción, Atención, Infraestructura).
  * - Status selector (Todos, Pendientes, En revisión, Atendidos).
@@ -49,13 +50,35 @@ export function SuggestionsFilterBar({
   totalFilteredCount,
   totalCount,
 }: SuggestionsFilterBarProps) {
+  // Local search query for 300 ms debounced input
+  const [searchTerm, setSearchTerm] = useState(filters.searchQuery);
+  const [prevSearchQuery, setPrevSearchQuery] = useState(filters.searchQuery);
+
+  // Sync internal state if external filter state changes without triggering effect warning
+  if (filters.searchQuery !== prevSearchQuery) {
+    setPrevSearchQuery(filters.searchQuery);
+    setSearchTerm(filters.searchQuery);
+  }
+
+  // Debounce search update (300 ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (searchTerm !== filters.searchQuery) {
+        onFilterChange({ ...filters, searchQuery: searchTerm });
+      }
+    }, 300);
+
+    return () => clearTimeout(handler);
+  }, [searchTerm, filters, onFilterChange]);
+
   const isFiltered =
     filters.shift !== "all" ||
     filters.category !== "all" ||
     filters.status !== "all" ||
-    filters.searchQuery.trim() !== "";
+    searchTerm.trim() !== "";
 
   const handleResetFilters = () => {
+    setSearchTerm("");
     onFilterChange({
       shift: "all",
       category: "all",
@@ -64,28 +87,36 @@ export function SuggestionsFilterBar({
     });
   };
 
+  const handleClearSearch = () => {
+    setSearchTerm("");
+    onFilterChange({ ...filters, searchQuery: "" });
+  };
+
   return (
     <div className="rounded-2xl border border-neutral-gray/20 bg-white p-4 shadow-sm space-y-4">
       {/* Top row: Search input + Actions */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/* Search Input */}
+        {/* Search Input with Debounce */}
         <div className="relative flex-1">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-gray">
             <Search className="h-4 w-4" />
           </div>
           <input
             type="text"
-            value={filters.searchQuery}
-            onChange={(e) =>
-              onFilterChange({ ...filters, searchQuery: e.target.value })
-            }
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                onFilterChange({ ...filters, searchQuery: searchTerm });
+              }
+            }}
             placeholder="Buscar por código (ej. UNSCH-7K4M) o texto…"
             className="block w-full rounded-xl border border-neutral-gray/30 bg-slate-50/50 py-2.5 pl-9 pr-8 text-sm text-gray-900 placeholder:text-neutral-gray shadow-xs focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
-          {filters.searchQuery && (
+          {searchTerm && (
             <button
               type="button"
-              onClick={() => onFilterChange({ ...filters, searchQuery: "" })}
+              onClick={handleClearSearch}
               className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-neutral-gray hover:text-gray-900"
               aria-label="Limpiar búsqueda"
             >
