@@ -1,6 +1,6 @@
 # Buzón de Sugerencias - Comedor UNSCH
 
-El destino de despliegue es **Firebase App Hosting con backend Next.js SSR**, proyecto `buzon-sugerencia-2c621`. Consulta [configuración, secretos y comandos](docs/deployment.md) antes del primer despliegue. La aplicación conserva sus Server Actions y rutas dinámicas; el build genera `.next/`, no una exportación estática `out/`.
+El destino de despliegue es **Vercel con backend Next.js SSR**, desde `ceis-pixel/buzon_sugerencias`. Consulta [configuración, secretos y comandos](docs/deployment.md) antes del primer despliegue. La aplicación conserva sus Server Actions y rutas dinámicas; el build genera `.next/`, no una exportación estática `out/`.
 
 Foundation for the UNSCH university dining feedback system, including the Crimson Heritage design tokens, Manrope typography, and typed Supabase clients.
 
@@ -35,7 +35,7 @@ Zod valida las URL, el dominio y al menos una de las dos claves públicas antes 
 
 Las variables `NEXT_PUBLIC_` quedan incorporadas al compilar: configura los valores de cada entorno antes del build y recompila cuando cambien. Nunca copies la clave de servicio a una variable pública. El prebuild rechaza alias públicos de service role y coincidencias con el secreto; el esquema rechaza claves `sb_secret_` y JWT con rol `service_role` en el campo anon. La lectura de la clave administrativa permanece en el módulo `server-only`.
 
-Para CI se permiten los placeholders de `.env.example`, con la configuración pública definida y sin clave administrativa. No hay omisión automática de validación ni valores predeterminados silenciosos en producción. Consulta [la guía de despliegue](docs/deployment.md) para configurar Firebase App Hosting y conocer las alternativas de alojamiento.
+Para CI se permiten los placeholders de `.env.example`, con la configuración pública definida y sin clave administrativa. No hay omisión automática de validación ni valores predeterminados silenciosos en producción. Consulta [la guía de despliegue](docs/deployment.md) para configurar Vercel y conocer las alternativas de alojamiento.
 
 - Browser: import `createClient` from `@/lib/supabase/client` in a Client Component.
 - Server Components and Server Actions: import and await `createClient` from `@/lib/supabase/server`. A new client is created for each request.

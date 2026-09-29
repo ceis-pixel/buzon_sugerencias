@@ -6,7 +6,7 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Firebase App Hosting runs the Next.js server adapter, including actions,
+  // Vercel runs the Next.js server adapter, including actions,
   // request cookies and API routes. Static export would disable these features.
   reactStrictMode: true,
   compress: true,
