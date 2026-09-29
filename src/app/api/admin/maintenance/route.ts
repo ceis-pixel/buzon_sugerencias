@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 
 import { getVerifiedAdmin } from "@/lib/actions/adminActions";
 import { STORAGE_BUCKET_NAME } from "@/lib/constants/storage";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +43,9 @@ export async function POST(request: Request) {
         { status: 401 },
       );
     }
+
+    // Load privileged credentials only after authorization, never during build.
+    const { supabaseAdmin } = await import("@/lib/supabase/admin");
 
     let daysOld = 90;
     try {

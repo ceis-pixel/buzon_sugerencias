@@ -12,6 +12,7 @@ describe("Supabase environment validation", () => {
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", undefined);
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", undefined);
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
     vi.stubEnv("NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN", "unsch.edu.pe");
@@ -36,6 +37,28 @@ describe("Supabase environment validation", () => {
   it("rejects a whitespace-only key", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "   ");
     expect(getSupabasePublicEnv).toThrow("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  });
+
+  it("accepts only the publishable key and prefers it when both keys exist", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_public-test-marker");
+    expect(getSupabasePublicEnv().anonKey).toBe("sb_publishable_public-test-marker");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", undefined);
+    expect(getPublicEnv().NEXT_PUBLIC_SUPABASE_ANON_KEY).toBe("sb_publishable_public-test-marker");
+  });
+
+  it("falls back to anon when the publishable slot is blank", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "   ");
+    expect(getSupabasePublicEnv().anonKey).toBe("test-anon-key");
+  });
+
+  it("rejects privileged or malformed keys in either configured slot", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_secret_private-test-marker");
+    expect(getSupabasePublicEnv).toThrow("no puede contener una clave privilegiada");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "short");
+    expect(getSupabasePublicEnv).toThrow("al menos 12 caracteres");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_public-test-marker");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "sb_secret_private-test-marker");
+    expect(getSupabasePublicEnv).toThrow("no puede contener una clave privilegiada");
   });
 
   it.each(["invalid-url", "file:///private", "ftp://localhost"])(

@@ -45,14 +45,31 @@ function isPrivilegedKey(value: string): boolean {
   }
 }
 
-const supabasePublicSchema = z.strictObject({
-  NEXT_PUBLIC_SUPABASE_URL: httpUrl("NEXT_PUBLIC_SUPABASE_URL"),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: requiredString("NEXT_PUBLIC_SUPABASE_ANON_KEY")
-    .min(12, "NEXT_PUBLIC_SUPABASE_ANON_KEY debe tener al menos 12 caracteres.")
+function publicKeySchema(name: string) {
+  return requiredString(name)
+    .min(12, `${name} debe tener al menos 12 caracteres.`)
     .refine(
       (value) => !isPrivilegedKey(value),
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY debe ser pública; no puede contener una clave privilegiada.",
-    ),
+      `${name} debe ser pública; no puede contener una clave privilegiada.`,
+    );
+}
+
+function getSupabasePublicKey(): string {
+  // Direct references let Next.js inline only explicitly public variables.
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  // Validate both configured slots, even the one that is not selected.
+  const anon = anonKey?.trim() ? parseEnvironment(publicKeySchema("NEXT_PUBLIC_SUPABASE_ANON_KEY"), anonKey) : undefined;
+  const publishable = publishableKey?.trim() ? parseEnvironment(publicKeySchema("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), publishableKey) : undefined;
+  if (!anon && !publishable) {
+    throw new SupabaseEnvironmentError("Falta configurar la variable de entorno NEXT_PUBLIC_SUPABASE_ANON_KEY o NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Define al menos una clave pública.");
+  }
+  return (publishable ?? anon)!;
+}
+
+const supabasePublicSchema = z.strictObject({
+  NEXT_PUBLIC_SUPABASE_URL: httpUrl("NEXT_PUBLIC_SUPABASE_URL"),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: publicKeySchema("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
 });
 
 export const publicEnvironmentSchema = supabasePublicSchema.extend({
@@ -82,7 +99,7 @@ export function getPublicEnv(): PublicEnvironment {
   // Accesos directos para que Next.js incorpore solo las variables públicas.
   return parseEnvironment(publicEnvironmentSchema, {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: getSupabasePublicKey(),
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN: process.env.NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN,
   });
@@ -98,7 +115,7 @@ export function getSupabaseUrl(): string {
 export function getSupabasePublicEnv() {
   const env = parseEnvironment(supabasePublicSchema, {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: getSupabasePublicKey(),
   });
   return {
     url: env.NEXT_PUBLIC_SUPABASE_URL,

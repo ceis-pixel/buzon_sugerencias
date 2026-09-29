@@ -1,0 +1,20 @@
+{
+  "apphosting": {
+    "backendId": "buzon-sugerencias",
+    "rootDir": ".",
+    "ignore": [
+      "node_modules",
+      ".git",
+      ".next",
+      "out",
+      ".firebase",
+      ".apphosting",
+      ".vercel",
+      ".env*",
+      "**/.env*",
+      "*.log",
+      "**/*.log",
+      "*.tsbuildinfo"
+    ]
+  }
+}

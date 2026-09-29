@@ -40,6 +40,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Firebase local cache and diagnostics
+.firebase/
+firebase-debug.log*
+ui-debug.log*
+.apphosting/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

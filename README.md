@@ -1,5 +1,7 @@
 # Buzón de Sugerencias - Comedor UNSCH
 
+El destino de despliegue es **Firebase App Hosting con backend Next.js SSR**, proyecto `buzon-sugerencia-2c621`. Consulta [configuración, secretos y comandos](docs/deployment.md) antes del primer despliegue. La aplicación conserva sus Server Actions y rutas dinámicas; el build genera `.next/`, no una exportación estática `out/`.
+
 Foundation for the UNSCH university dining feedback system, including the Crimson Heritage design tokens, Manrope typography, and typed Supabase clients.
 
 ## Requirements
@@ -24,15 +26,16 @@ Copia `.env.example` a `.env.local` y reemplaza los ejemplos con los valores del
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | URL HTTP/HTTPS sin credenciales; todos los clientes |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave pública anon o publishable, mínimo 12 caracteres |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Alternativa a ANON_KEY, preferida si ambas están definidas; nunca admite secretos |
 | `SUPABASE_SERVICE_ROLE_KEY` | Solo servidor; mínimo 20 caracteres, obligatoria al importar el cliente privilegiado |
 | `NEXT_PUBLIC_APP_URL` | URL HTTP/HTTPS de la aplicación; usar el dominio real en producción |
 | `NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN` | Dominio estudiantil sin @, protocolo ni ruta; valor institucional `unsch.edu.pe` |
 
-Zod valida las cuatro variables públicas antes de `npm run build`, mediante `prebuild`. Los clientes también validan su configuración al instanciarse. Importar el esquema, ejecutar ESLint o comprobar tipos no exige credenciales. Los errores están en español y no incluyen valores. La validación verifica formato y presencia; no confirma que una credencial sea auténtica.
+Zod valida las URL, el dominio y al menos una de las dos claves públicas antes de `npm run build`, mediante `prebuild`. Los clientes también validan su configuración al instanciarse. Importar el esquema, ejecutar ESLint o comprobar tipos no exige credenciales. Los errores están en español y no incluyen valores. La validación verifica formato y presencia; no confirma que una credencial sea auténtica.
 
 Las variables `NEXT_PUBLIC_` quedan incorporadas al compilar: configura los valores de cada entorno antes del build y recompila cuando cambien. Nunca copies la clave de servicio a una variable pública. El prebuild rechaza alias públicos de service role y coincidencias con el secreto; el esquema rechaza claves `sb_secret_` y JWT con rol `service_role` en el campo anon. La lectura de la clave administrativa permanece en el módulo `server-only`.
 
-Para CI se permiten los placeholders de `.env.example`, con las cuatro variables públicas definidas y sin clave administrativa. No hay omisión automática de validación ni valores predeterminados silenciosos en producción. Consulta [la guía de despliegue](docs/deployment.md) para configurar Vercel y conocer la limitación de Cloudflare Pages.
+Para CI se permiten los placeholders de `.env.example`, con la configuración pública definida y sin clave administrativa. No hay omisión automática de validación ni valores predeterminados silenciosos en producción. Consulta [la guía de despliegue](docs/deployment.md) para configurar Firebase App Hosting y conocer las alternativas de alojamiento.
 
 - Browser: import `createClient` from `@/lib/supabase/client` in a Client Component.
 - Server Components and Server Actions: import and await `createClient` from `@/lib/supabase/server`. A new client is created for each request.

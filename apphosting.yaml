@@ -1,0 +1,28 @@
+# Firebase App Hosting compila y ejecuta Next.js con su adaptador oficial.
+# Crear los valores referenciados en Secret Manager antes del primer despliegue.
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  cpu: 1
+  memoryMiB: 512
+  concurrency: 80
+
+env:
+  - variable: NEXT_PUBLIC_SUPABASE_URL
+    value: https://skfobinspglnuqutbolx.supabase.co
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    secret: supabase-publishable-key
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_APP_URL
+    secret: app-public-url
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN
+    value: unsch.edu.pe
+    availability: [BUILD, RUNTIME]
+
+# Solo si se utiliza mantenimiento privilegiado, agregar:
+#  - variable: SUPABASE_SERVICE_ROLE_KEY
+#    secret: supabase-service-role-key
+#    availability: [RUNTIME]
+# Los webhooks también se configuran como secretos exclusivos de RUNTIME.
