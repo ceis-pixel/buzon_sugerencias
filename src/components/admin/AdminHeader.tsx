@@ -35,6 +35,7 @@ export function AdminHeader({ admin }: AdminHeaderProps) {
   const pathname = usePathname();
 
   const isAnalitica = pathname.startsWith("/admin/analitica");
+  const isMenus = pathname.startsWith("/admin/menus");
   const isInbox = pathname === "/admin";
 
   return (
@@ -79,6 +80,17 @@ export function AdminHeader({ admin }: AdminHeaderProps) {
                 <span>Bandeja</span>
               </Link>
               <Link
+                href="/admin/menus"
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  isMenus
+                    ? "bg-white text-primary shadow-xs"
+                    : "text-neutral-gray hover:text-gray-900 hover:bg-slate-200/50"
+                }`}
+              >
+                <UtensilsCrossed className="h-3.5 w-3.5" />
+                <span>Gestión de Menús</span>
+              </Link>
+              <Link
                 href="/admin/analitica"
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   isAnalitica
@@ -104,6 +116,15 @@ export function AdminHeader({ admin }: AdminHeaderProps) {
                 title="Bandeja de moderación"
               >
                 <Inbox className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/admin/menus"
+                className={`p-2 rounded-xl text-xs font-semibold ${
+                  isMenus ? "bg-primary/10 text-primary" : "text-neutral-gray"
+                }`}
+                title="Gestión de menús diarios"
+              >
+                <UtensilsCrossed className="h-4 w-4" />
               </Link>
               <Link
                 href="/admin/analitica"

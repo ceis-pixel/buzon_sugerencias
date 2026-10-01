@@ -153,6 +153,110 @@ export interface Database {
         };
         Relationships: [];
       };
+      daily_menus: {
+        Row: {
+          id: string;
+          date: string;
+          shift: Database["public"]["Enums"]["shift_type"];
+          main_dish: string;
+          side_dish: string | null;
+          beverage: string | null;
+          published_by: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          date?: string;
+          shift: Database["public"]["Enums"]["shift_type"];
+          main_dish: string;
+          side_dish?: string | null;
+          beverage?: string | null;
+          published_by?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          date?: string;
+          shift?: Database["public"]["Enums"]["shift_type"];
+          main_dish?: string;
+          side_dish?: string | null;
+          beverage?: string | null;
+          published_by?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      menu_ratings: {
+        Row: {
+          id: string;
+          menu_id: string;
+          rating_main: number;
+          rating_side: number | null;
+          rating_beverage: number | null;
+          shift: Database["public"]["Enums"]["shift_type"];
+          rating_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          menu_id: string;
+          rating_main: number;
+          rating_side?: number | null;
+          rating_beverage?: number | null;
+          shift: Database["public"]["Enums"]["shift_type"];
+          rating_date?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          menu_id?: string;
+          rating_main?: number;
+          rating_side?: number | null;
+          rating_beverage?: number | null;
+          shift?: Database["public"]["Enums"]["shift_type"];
+          rating_date?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "menu_ratings_menu_id_fkey";
+            columns: ["menu_id"];
+            isOneToOne: false;
+            referencedRelation: "daily_menus";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      menu_rating_limits: {
+        Row: {
+          id: string;
+          rate_hash: string;
+          shift: Database["public"]["Enums"]["shift_type"];
+          rating_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          rate_hash: string;
+          shift: Database["public"]["Enums"]["shift_type"];
+          rating_date?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          rate_hash?: string;
+          shift?: Database["public"]["Enums"]["shift_type"];
+          rating_date?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -172,6 +276,22 @@ export interface Database {
           p_photo_url?: string | null;
         };
         Returns: Json;
+      };
+      submit_menu_rating: {
+        Args: {
+          p_menu_id: string;
+          p_shift: Database["public"]["Enums"]["shift_type"];
+          p_rating_main: number;
+          p_rating_side?: number | null;
+          p_rating_beverage?: number | null;
+        };
+        Returns: Json;
+      };
+      has_user_rated_today: {
+        Args: {
+          p_shift: Database["public"]["Enums"]["shift_type"];
+        };
+        Returns: boolean;
       };
       purge_orphaned_or_old_media: {
         Args: {
@@ -215,6 +335,30 @@ export type TicketResponseUpdate = Database["public"]["Tables"]["ticket_response
 export type SubmissionRateLimitRow = Database["public"]["Tables"]["submission_rate_limits"]["Row"];
 export type SubmissionRateLimitInsert = Database["public"]["Tables"]["submission_rate_limits"]["Insert"];
 export type SubmissionRateLimitUpdate = Database["public"]["Tables"]["submission_rate_limits"]["Update"];
+
+export type DailyMenuRow = Database["public"]["Tables"]["daily_menus"]["Row"];
+export type DailyMenuInsert = Database["public"]["Tables"]["daily_menus"]["Insert"];
+export type DailyMenuUpdate = Database["public"]["Tables"]["daily_menus"]["Update"];
+
+export type MenuRatingRow = Database["public"]["Tables"]["menu_ratings"]["Row"];
+export type MenuRatingInsert = Database["public"]["Tables"]["menu_ratings"]["Insert"];
+export type MenuRatingUpdate = Database["public"]["Tables"]["menu_ratings"]["Update"];
+
+export type MenuRatingLimitRow = Database["public"]["Tables"]["menu_rating_limits"]["Row"];
+export type MenuRatingLimitInsert = Database["public"]["Tables"]["menu_rating_limits"]["Insert"];
+export type MenuRatingLimitUpdate = Database["public"]["Tables"]["menu_rating_limits"]["Update"];
+
+export interface MenuRatingStats {
+  count: number;
+  avg_main: number;
+  avg_side: number | null;
+  avg_beverage: number | null;
+  avg_overall: number;
+}
+
+export interface DailyMenuWithStats extends DailyMenuRow {
+  stats?: MenuRatingStats;
+}
 
 /** @deprecated Use ShiftType instead */
 export type MealShift = ShiftType;

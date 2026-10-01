@@ -8,6 +8,7 @@ import { FormFieldsShowcase } from "@/components/examples/FormFieldsShowcase";
 import { ImageUploadShowcase } from "@/components/examples/ImageUploadShowcase";
 import { SuggestionFormShowcase } from "@/components/examples/SuggestionFormShowcase";
 import { SuggestionForm } from "@/components/suggestion/SuggestionForm";
+import { DailyMenuCard } from "@/components/rating/DailyMenuCard";
 import { PageContainer } from "@/components/layout/PageContainer";
 
 export default function HomePage() {
@@ -76,6 +77,14 @@ export default function HomePage() {
               Preguntas Frecuentes (/preguntas-frecuentes) →
             </a>
           </div>
+        </section>
+
+        {/* Sprint 11: Módulo de Calificación Diaria y Termómetro en Tiempo Real */}
+        <section aria-labelledby="daily-menu-title" className="space-y-2">
+          <h2 id="daily-menu-title" className="sr-only">
+            Menú Universitario del Día y Termómetro de Satisfacción
+          </h2>
+          <DailyMenuCard />
         </section>
 
         <section aria-labelledby="form-live-title" className="space-y-4">

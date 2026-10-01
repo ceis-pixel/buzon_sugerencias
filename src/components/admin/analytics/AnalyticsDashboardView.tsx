@@ -12,7 +12,9 @@ import {
   PieChart,
   Printer,
   Sparkles,
+  Star,
   Trash2,
+  TrendingUp,
   Utensils,
 } from "lucide-react";
 
@@ -20,12 +22,17 @@ import { Button } from "@/components/common/Button";
 import { getCategoryLabel } from "@/components/suggestion/CategorySelector";
 import { getShiftLabel } from "@/components/suggestion/ShiftSelector";
 import type { SuggestionWithResponse } from "@/components/admin/SuggestionDetailModal";
-import type { ShiftType, SuggestionCategory } from "@/types/database.types";
+import type {
+  DailyMenuWithStats,
+  ShiftType,
+  SuggestionCategory,
+} from "@/types/database.types";
 
 export type TimeRange = "7d" | "month" | "semester";
 
 export interface AnalyticsDashboardViewProps {
   suggestions: SuggestionWithResponse[];
+  menus?: DailyMenuWithStats[];
 }
 
 interface StoragePurgeResult {
@@ -45,7 +52,10 @@ interface StoragePurgeResult {
  * - One-click Storage Maintenance routine trigger (Issue 10.4).
  * - Print-ready technical summary formatting.
  */
-export function AnalyticsDashboardView({ suggestions }: AnalyticsDashboardViewProps) {
+export function AnalyticsDashboardView({
+  suggestions,
+  menus = [],
+}: AnalyticsDashboardViewProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>("month");
   const [isPurgingStorage, setIsPurgingStorage] = useState(false);
   const [purgeResult, setPurgeResult] = useState<StoragePurgeResult | null>(null);
@@ -167,6 +177,79 @@ export function AnalyticsDashboardView({ suggestions }: AnalyticsDashboardViewPr
       attentionRate,
     };
   }, [filteredData]);
+
+  // Issue 11.6: Correlation between low-rated menus (< 3.0 stars) and complaints in 'menu' or 'portion'
+  const menuCorrelation = useMemo(() => {
+    if (!menus || menus.length === 0) {
+      return null;
+    }
+
+    // Map suggestions by date and shift for category 'menu' or 'portion'
+    const complaintsByDateAndShift = new Map<string, number>();
+    for (const s of suggestions) {
+      if (s.category === "menu" || s.category === "portion") {
+        const dateKey = s.created_at.split("T")[0];
+        const key = `${dateKey}_${s.shift}`;
+        complaintsByDateAndShift.set(key, (complaintsByDateAndShift.get(key) || 0) + 1);
+      }
+    }
+
+    const menusWithStats = menus.filter((m) => m.stats && m.stats.count > 0);
+    const lowRatedMenus = menusWithStats.filter((m) => (m.stats?.avg_overall ?? 5) < 3.0);
+    const normalMenus = menusWithStats.filter((m) => (m.stats?.avg_overall ?? 5) >= 3.0);
+
+    let lowRatedComplaintsTotal = 0;
+    const lowRatedDetails: Array<{
+      id: string;
+      date: string;
+      shift: ShiftType;
+      dish: string;
+      avgScore: number;
+      complaintsCount: number;
+    }> = [];
+
+    for (const m of lowRatedMenus) {
+      const key = `${m.date}_${m.shift}`;
+      const complaints = complaintsByDateAndShift.get(key) || 0;
+      lowRatedComplaintsTotal += complaints;
+      lowRatedDetails.push({
+        id: m.id,
+        date: m.date,
+        shift: m.shift,
+        dish: m.main_dish,
+        avgScore: m.stats?.avg_overall ?? 0,
+        complaintsCount: complaints,
+      });
+    }
+
+    let normalComplaintsTotal = 0;
+    for (const m of normalMenus) {
+      const key = `${m.date}_${m.shift}`;
+      normalComplaintsTotal += complaintsByDateAndShift.get(key) || 0;
+    }
+
+    const avgComplaintsLow =
+      lowRatedMenus.length > 0 ? lowRatedComplaintsTotal / lowRatedMenus.length : 0;
+    const avgComplaintsNormal =
+      normalMenus.length > 0 ? normalComplaintsTotal / normalMenus.length : 0;
+
+    const percentageIncrease =
+      avgComplaintsNormal > 0
+        ? Math.round(((avgComplaintsLow - avgComplaintsNormal) / avgComplaintsNormal) * 100)
+        : lowRatedComplaintsTotal > 0
+          ? 100
+          : 0;
+
+    return {
+      evaluatedMenusCount: menusWithStats.length,
+      lowRatedCount: lowRatedMenus.length,
+      lowRatedComplaintsTotal,
+      avgComplaintsLow: Math.round(avgComplaintsLow * 10) / 10,
+      avgComplaintsNormal: Math.round(avgComplaintsNormal * 10) / 10,
+      percentageIncrease,
+      flaggedMenus: lowRatedDetails,
+    };
+  }, [menus, suggestions]);
 
   // Trigger on-demand storage maintenance routine (Issue 10.4)
   const handleTriggerMaintenance = async () => {
@@ -457,6 +540,117 @@ export function AnalyticsDashboardView({ suggestions }: AnalyticsDashboardViewPr
           </div>
         </div>
       </div>
+
+      {/* Issue 11.6: Cruce Analítico - Correlación entre Menús con Baja Puntuación y Reclamos de Menú/Porción */}
+      {menuCorrelation && (
+        <div className="rounded-2xl border border-gray-200/90 bg-white p-6 shadow-sm space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white shadow-xs">
+                <TrendingUp className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="font-sans text-base font-extrabold text-gray-900">
+                  Cruce Analítico: Calificación del Menú vs Reclamos de Ración y Sabor
+                </h2>
+                <p className="text-xs text-neutral-gray">
+                  Correlación estadística entre turnos con baja satisfacción (&lt; 3.0 estrellas) y volumen de observaciones en &ldquo;Menú&rdquo; y &ldquo;Porción&rdquo;.
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 rounded-full bg-secondary/10 px-2.5 py-0.5 text-xs font-bold text-secondary">
+              Auditoría Nutricional
+            </span>
+          </div>
+
+          {/* 3 Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-center">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-primary block">
+                Menús Observados (&lt; 3.0 ★)
+              </span>
+              <p className="font-sans text-2xl font-black text-gray-900 mt-1">
+                {menuCorrelation.lowRatedCount}
+                <span className="text-xs font-normal text-neutral-gray ml-1">
+                  / {menuCorrelation.evaluatedMenusCount} evaluados
+                </span>
+              </p>
+              <p className="text-[11px] text-neutral-gray mt-1">
+                {menuCorrelation.lowRatedCount > 0
+                  ? "Turnos que no alcanzaron el estándar aceptable"
+                  : "Todos los menús superaron el estándar mínimo"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-neutral-gray/20 bg-slate-50 p-4 text-center">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700 block">
+                Promedio Quejas por Turno
+              </span>
+              <p className="font-sans text-2xl font-black text-gray-900 mt-1">
+                {menuCorrelation.avgComplaintsLow}
+                <span className="text-xs font-normal text-neutral-gray ml-1">
+                  vs {menuCorrelation.avgComplaintsNormal} (días ≥ 3★)
+                </span>
+              </p>
+              <p className="text-[11px] text-neutral-gray mt-1">
+                Reclamos de menú o ración insuficiente por turno
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-secondary/20 bg-secondary/5 p-4 text-center">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-secondary block">
+                Sensibilidad Estudiantil
+              </span>
+              <p className="font-sans text-2xl font-black text-secondary mt-1">
+                {menuCorrelation.percentageIncrease > 0 ? `+${menuCorrelation.percentageIncrease}%` : "0%"}
+              </p>
+              <p className="text-[11px] text-neutral-gray mt-1">
+                Variación en el volumen de reportes cuando baja la satisfacción
+              </p>
+            </div>
+          </div>
+
+          {/* Details of Flagged Menus */}
+          {menuCorrelation.flaggedMenus.length > 0 ? (
+            <div className="space-y-2 pt-2">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-gray-700">
+                Turnos Observados con Menor Calificación y sus Reclamos Asociados:
+              </h3>
+              <div className="space-y-2">
+                {menuCorrelation.flaggedMenus.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-200/80 bg-red-50/40 p-3 text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-900">
+                        {item.date} ({item.shift === "breakfast" ? "Desayuno" : item.shift === "lunch" ? "Almuerzo" : "Cena"}):
+                      </span>
+                      <span className="italic text-gray-800">&ldquo;{item.dish}&rdquo;</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center gap-1 font-bold text-red-700">
+                        <Star className="h-3.5 w-3.5 fill-red-600 stroke-red-600" />
+                        {item.avgScore.toFixed(1)} / 5.0
+                      </span>
+                      <span className="rounded-md bg-red-100 px-2 py-0.5 font-bold text-red-900">
+                        {item.complaintsCount} reclamo{item.complaintsCount === 1 ? "" : "s"} (menú/porción)
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-xs text-emerald-900 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>
+                Excelente desempeño: Ningún turno registrado ha caído por debajo de las 3.0 estrellas en el período evaluado.
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Storage Maintenance & Sustainability Card (Issue 10.4) */}
       <div className="rounded-2xl border border-secondary/25 bg-gradient-to-br from-white to-secondary/5 p-6 shadow-sm space-y-4">

@@ -11,6 +11,8 @@ export const metadata: Metadata = {
     "Panel visual de métricas, distribución de incidencias y tasas de resolución para fundamentar informes técnicos ante la Dirección de Bienestar Universitario.",
 };
 
+export const dynamic = "force-dynamic";
+
 /**
  * /admin/analitica — Impact Analytics Page (Issue 10.1)
  *
@@ -64,5 +66,14 @@ export default async function AdminAnaliticaPage() {
     };
   });
 
-  return <AnalyticsDashboardView suggestions={suggestions} />;
+  // Fetch menus with rating metrics for correlation analysis (Issue 11.6)
+  let recentMenus: import("@/types/database.types").DailyMenuWithStats[] = [];
+  try {
+    const { getRecentMenusWithStats } = await import("@/lib/actions/menuRatingActions");
+    recentMenus = await getRecentMenusWithStats(30);
+  } catch (menuErr) {
+    console.error("[AdminAnaliticaPage] Menus fetch error:", menuErr);
+  }
+
+  return <AnalyticsDashboardView suggestions={suggestions} menus={recentMenus} />;
 }
