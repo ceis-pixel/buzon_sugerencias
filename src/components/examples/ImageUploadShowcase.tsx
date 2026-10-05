@@ -177,7 +177,7 @@ export function ImageUploadShowcase() {
               <div className="flex items-center gap-2">
                 <CloudUpload className="size-5 text-primary" />
                 <h4 className="text-sm font-bold text-gray-900">
-                  Transferencia a Supabase Storage Exitosa
+                  Transferencia al Almacenamiento Institucional Exitosa
                 </h4>
               </div>
               <Badge variant="success" size="sm">

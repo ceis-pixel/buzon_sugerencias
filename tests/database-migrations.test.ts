@@ -283,7 +283,7 @@ describe("Sprint 3 and Sprint 4 migration integration", () => {
 
       try {
         const { rows } = await db.query<{ result: typeof ticketResult }>(
-          "SELECT public.submit_anonymous_suggestion('lunch'::public.shift_type, 'service'::public.suggestion_category, 'Excelente atención en las mesas del comedor.', 'https://storage.supabase.co/img.webp') AS result",
+          "SELECT public.submit_anonymous_suggestion('lunch'::public.shift_type, 'service'::public.suggestion_category, 'Excelente atención en las mesas del comedor.', '/uploads/lunch/2026/10/3f2b8c1e-7a4d-4e9b-9c1a-5d6e7f8a9b0c.webp') AS result",
         );
         ticketResult = rows[0].result;
       } finally {
@@ -305,7 +305,7 @@ describe("Sprint 3 and Sprint 4 migration integration", () => {
       expect(storedRows).toHaveLength(1);
       const stored = storedRows[0];
       expect(stored.ticket_code).toBe(ticketResult.ticket_code);
-      expect(stored.photo_url).toBe("https://storage.supabase.co/img.webp");
+      expect(stored.photo_url).toBe("/uploads/lunch/2026/10/3f2b8c1e-7a4d-4e9b-9c1a-5d6e7f8a9b0c.webp");
       expect(Object.keys(stored)).toEqual([
         "id",
         "ticket_code",

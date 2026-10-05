@@ -1,0 +1,113 @@
+# Buzón de Sugerencias - Comedor UNSCH
+# On-premise stack (OTI UNSCH): Next.js standalone + PostgreSQL 16 + local media volume.
+# The only outbound dependency is Google Workspace SSO (accounts.google.com).
+#
+# Usage:
+#   cp .env.example .env      # then replace every placeholder secret
+#   docker compose up -d --build
+#
+# Secrets live only in .env (git-ignored and excluded from the build context).
+# Compose reads it for variable interpolation and injects it at RUNTIME.
+
+name: buzon-comedor-unsch
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Define POSTGRES_DB en .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Define POSTGRES_USER en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+      TZ: America/Lima
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Init scripts run once, only when the data volume is empty.
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ./supabase/migrations:/sql/migrations:ro
+      - ./supabase/seed.sql:/sql/seed.sql:ro
+    healthcheck:
+      # TCP check on purpose: during first-run initialization PostgreSQL only
+      # listens on the Unix socket, so the service is not reported healthy
+      # until every init script has finished.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+    # No published ports: the database is reachable only from the app container.
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Public, non-secret values inlined in the browser bundle at build time.
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+        NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-unsch.edu.pe}
+    image: buzon-comedor-unsch:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      UPLOAD_DIR: /app/uploads
+      TZ: America/Lima
+    ports:
+      - "3000:3000"
+    volumes:
+      - app_uploads:/app/uploads
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+      - frontend
+
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    profiles:
+      - production
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - frontend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+
+networks:
+  # Isolated bridge: no route to the host network or the internet.
+  backend:
+    driver: bridge
+    internal: true
+  # Bridge used only to publish the application port.
+  frontend:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  app_uploads:

@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { fetchTicketDetails } from "@/lib/services/suggestionService";
 import {
   ticketLookupSchema,
   type TicketLookupInput,
@@ -20,7 +20,7 @@ export type LookupTicketResult =
 /**
  * Server Action: looks up a ticket by its public code.
  * Performs zero authentication — any visitor with the code can query.
- * Uses the public anon key which is restricted by RLS to read-only, public fields.
+ * Only public fields and non-internal responses are returned.
  */
 export async function lookupTicket(
   input: TicketLookupInput,
@@ -40,26 +40,9 @@ export async function lookupTicket(
   const normalizedCode = validation.data.code.trim().toUpperCase();
 
   try {
-    const supabase = await createClient();
+    const details = await fetchTicketDetails(normalizedCode);
 
-    // Query the suggestions table for the ticket code (public read via RLS).
-    const { data: suggestion, error: suggestionError } = await supabase
-      .from("suggestions")
-      .select("*")
-      .eq("ticket_code", normalizedCode)
-      .maybeSingle();
-
-    if (suggestionError) {
-      console.error("[lookupTicket] Supabase error:", suggestionError);
-      return {
-        success: false,
-        data: null,
-        error:
-          "Ocurrió un problema al consultar el sistema. Por favor intenta de nuevo en unos momentos.",
-      };
-    }
-
-    if (!suggestion) {
+    if (!details) {
       return {
         success: false,
         data: null,
@@ -67,34 +50,14 @@ export async function lookupTicket(
       };
     }
 
-    // Fetch only non-internal (public) responses for this ticket.
-    const { data: responses, error: responsesError } = await supabase
-      .from("ticket_responses")
-      .select("*")
-      .eq("suggestion_id", suggestion.id)
-      .eq("is_internal", false)
-      .order("created_at", { ascending: true });
-
-    if (responsesError) {
-      // Non-fatal: return ticket without responses rather than blocking the user.
-      console.error("[lookupTicket] Responses fetch error:", responsesError);
-    }
-
-    return {
-      success: true,
-      data: {
-        suggestion: suggestion as SuggestionRow,
-        responses: (responses ?? []) as TicketResponse[],
-      },
-      error: null,
-    };
+    return { success: true, data: details, error: null };
   } catch (err) {
-    console.error("[lookupTicket] Unexpected error:", err);
+    console.error("[lookupTicket] Unexpected error:", (err as Error).message);
     return {
       success: false,
       data: null,
       error:
-        "Ocurrió un error inesperado al buscar tu ticket. Por favor intenta nuevamente.",
+        "Ocurrió un problema al consultar el sistema. Por favor intenta de nuevo en unos momentos.",
     };
   }
 }

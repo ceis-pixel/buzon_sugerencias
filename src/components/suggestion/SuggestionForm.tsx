@@ -167,7 +167,7 @@ export function SuggestionForm({
         }
       }
 
-      // Stage 2: Submit RPC to Supabase
+      // Stage 2: Submit through the Server Action (native PostgreSQL transaction)
       setSubmissionStage("submitting_rpc");
 
       // Defensive timeout: if request takes > 3.0 seconds, transition to slow network stage

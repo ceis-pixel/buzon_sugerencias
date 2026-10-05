@@ -1,22 +1,27 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  ALLOWED_UPLOAD_MIME_TYPES,
+  DEFAULT_MAX_UPLOAD_SIZE_BYTES,
+  DEFAULT_UPLOAD_TIMEOUT_MS,
+  generateStoragePath,
+  isAllowedUploadMimeType,
+  UPLOAD_ENDPOINT,
+  UPLOAD_FOLDER_FIELD,
+  UPLOAD_FORM_FIELD,
+  type AllowedUploadMimeType,
+} from "@/lib/storage/uploadPolicy";
 
-import { STORAGE_BUCKET_NAME } from "@/lib/constants/storage";
-import { createClient } from "@/lib/supabase/client";
-import type { Database } from "@/types/database.types";
-
-export const DEFAULT_MAX_UPLOAD_SIZE_BYTES = 500 * 1024; // 500 KB limit for compressed uploads
-export const DEFAULT_UPLOAD_TIMEOUT_MS = 15000; // 15 seconds defensive timeout for unstable 2G/3G networks
-export const ALLOWED_UPLOAD_MIME_TYPES = [
-  "image/webp",
-  "image/jpeg",
-] as const;
-
-export type AllowedUploadMimeType = (typeof ALLOWED_UPLOAD_MIME_TYPES)[number];
+// Re-exported for backwards compatibility with existing imports and tests.
+export {
+  ALLOWED_UPLOAD_MIME_TYPES,
+  DEFAULT_MAX_UPLOAD_SIZE_BYTES,
+  DEFAULT_UPLOAD_TIMEOUT_MS,
+  generateStoragePath,
+  type AllowedUploadMimeType,
+};
 
 export interface UploadImageOptions {
   folder?: string;
   maxSizeBytes?: number;
-  client?: SupabaseClient<Database>;
 }
 
 export interface ResilientUploadOptions extends UploadImageOptions {
@@ -26,9 +31,21 @@ export interface ResilientUploadOptions extends UploadImageOptions {
 }
 
 export interface UploadImageResult {
+  /** Public path served by the app, e.g. `/uploads/2026/10/uuid.webp`. */
   publicUrl: string;
+  /** Relative path inside the uploads volume, e.g. `2026/10/uuid.webp`. */
   storagePath: string;
   fileSize: number;
+}
+
+interface UploadApiSuccess {
+  path: string;
+  storagePath: string;
+  size: number;
+}
+
+interface UploadApiError {
+  error?: { code?: string; message?: string };
 }
 
 /**
@@ -54,42 +71,75 @@ export class StorageUploadError extends Error {
   }
 }
 
-/**
- * Generates an anonymous, date-partitioned storage path using UUID v4.
- * Format: `YYYY/MM/uuid-v4.webp` (or `${folder}/YYYY/MM/uuid-v4.webp`)
- *
- * Discards local file names completely to guarantee student anonymity and avoid collisions.
- */
-export function generateStoragePath(
-  extension: string = "webp",
-  folder?: string
-): string {
-  const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+const ABORTED_MESSAGE = "La subida de la imagen fue cancelada.";
+const TIMEOUT_MESSAGE =
+  "La conexión tardó demasiado tiempo. Comprueba tu señal móvil e intenta nuevamente.";
+const NETWORK_MESSAGE =
+  "No se pudo subir la imagen por problemas de conexión. Por favor, reintenta el envío.";
 
-  const uuid =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-          const r = (Math.random() * 16) | 0;
-          const v = c === "x" ? r : (r & 0x3) | 0x8;
-          return v.toString(16);
-        });
+async function readJson<T>(response: Response): Promise<T | null> {
+  try {
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
 
-  const cleanExt = extension.replace(/^\.+/, "").toLowerCase();
+/** Translates an HTTP error from /api/upload into a student-friendly StorageUploadError. */
+function toUploadError(status: number, body: UploadApiError | null): StorageUploadError {
+  const serverMessage = body?.error?.message;
+  const serverCode = body?.error?.code;
 
-  if (folder) {
-    const cleanFolder = folder.replace(/^\/+|\/+$/g, "");
-    return `${cleanFolder}/${year}/${month}/${uuid}.${cleanExt}`;
+  if (status === 413) {
+    return new StorageUploadError(
+      serverMessage ?? "La imagen supera el límite de tamaño permitido por el servidor.",
+      "PAYLOAD_TOO_LARGE",
+      413
+    );
   }
 
-  return `${year}/${month}/${uuid}.${cleanExt}`;
+  if (status === 401 || status === 403) {
+    return new StorageUploadError(
+      serverMessage ??
+        "No cuentas con permisos para subir fotografías. Debes iniciar sesión con tu cuenta institucional.",
+      "UNAUTHORIZED",
+      status
+    );
+  }
+
+  if (status === 415) {
+    return new StorageUploadError(
+      serverMessage ??
+        "Formato de imagen no permitido. Solo se aceptan fotografías en formato WebP o JPEG.",
+      "INVALID_FORMAT",
+      415
+    );
+  }
+
+  if (status === 408 || status === 504) {
+    return new StorageUploadError(TIMEOUT_MESSAGE, "TIMEOUT_ERROR", status);
+  }
+
+  if (status === 503) {
+    return new StorageUploadError(
+      serverMessage ?? "El almacenamiento no se encuentra disponible temporalmente.",
+      "SERVICE_UNAVAILABLE",
+      503
+    );
+  }
+
+  return new StorageUploadError(
+    serverMessage ?? "Error al subir la fotografía a nuestro almacenamiento seguro.",
+    serverCode ?? "UPLOAD_FAILED",
+    status
+  );
 }
 
 /**
- * Uploads an optimized suggestion photo to the `suggestion-media` Supabase Storage bucket.
- * Enforces defensive size and format validations, timeout protection, and abort handling.
+ * Uploads an optimized suggestion photo to the institutional on-premise storage
+ * through the internal `/api/upload` Route Handler (persisted in the `app_uploads`
+ * Docker volume). Enforces defensive size and format validations, timeout
+ * protection, and abort handling before any byte leaves the device.
  */
 export async function uploadSuggestionImage(
   file: File | Blob,
@@ -97,10 +147,7 @@ export async function uploadSuggestionImage(
 ): Promise<UploadImageResult> {
   // Check abort status immediately before doing any work
   if (options?.signal?.aborted) {
-    throw new StorageUploadError(
-      "La subida de la imagen fue cancelada.",
-      "ABORTED"
-    );
+    throw new StorageUploadError(ABORTED_MESSAGE, "ABORTED");
   }
 
   if (!file || file.size <= 0) {
@@ -122,7 +169,7 @@ export async function uploadSuggestionImage(
 
   // 2. Validate strict allowed MIME type
   const fileType = file.type || "image/webp";
-  if (!ALLOWED_UPLOAD_MIME_TYPES.includes(fileType as AllowedUploadMimeType)) {
+  if (!isAllowedUploadMimeType(fileType)) {
     throw new StorageUploadError(
       "Formato de imagen no permitido. Solo se aceptan fotografías en formato WebP o JPEG.",
       "INVALID_FORMAT",
@@ -130,14 +177,16 @@ export async function uploadSuggestionImage(
     );
   }
 
-  // 3. Determine file extension
-  const extension = fileType === "image/jpeg" ? "jpg" : "webp";
-  const storagePath = generateStoragePath(extension, options?.folder);
+  // 3. Build multipart payload (the server assigns the anonymous UUID file name)
+  const payload =
+    file.type === fileType ? file : new Blob([file], { type: fileType });
+  const formData = new FormData();
+  formData.append(UPLOAD_FORM_FIELD, payload, `upload.${fileType === "image/jpeg" ? "jpg" : "webp"}`);
+  if (options?.folder) {
+    formData.append(UPLOAD_FOLDER_FIELD, options.folder);
+  }
 
-  // 4. Resolve client
-  const supabase = options?.client ?? createClient();
-
-  // 5. Setup progress emulation & timeout/abort controller race
+  // 4. Setup progress emulation & a combined timeout/abort controller
   options?.onProgress?.(15);
   let currentProgress = 15;
   const progressInterval = setInterval(() => {
@@ -147,165 +196,96 @@ export async function uploadSuggestionImage(
     }
   }, 250);
 
+  const controller = new AbortController();
+  let timedOut = false;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  let abortListener: (() => void) | undefined;
+  const abortListener = () => controller.abort();
+  options?.signal?.addEventListener("abort", abortListener, { once: true });
 
-  const cancelOrTimeoutPromise = new Promise<never>((_, reject) => {
-    if (options?.signal?.aborted) {
-      reject(new StorageUploadError("La subida de la imagen fue cancelada.", "ABORTED"));
-      return;
-    }
-
-    abortListener = () => {
-      reject(new StorageUploadError("La subida de la imagen fue cancelada.", "ABORTED"));
-    };
-    options?.signal?.addEventListener("abort", abortListener, { once: true });
-
-    const timeoutMs = options?.timeoutMs ?? DEFAULT_UPLOAD_TIMEOUT_MS;
-    if (timeoutMs > 0) {
-      timeoutId = setTimeout(() => {
-        reject(
-          new StorageUploadError(
-            "La conexión tardó demasiado tiempo. Comprueba tu señal móvil e intenta nuevamente.",
-            "TIMEOUT_ERROR",
-            408
-          )
-        );
-      }, timeoutMs);
-    }
-  });
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_UPLOAD_TIMEOUT_MS;
+  if (timeoutMs > 0) {
+    timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+  }
 
   try {
-    const uploadOperation = supabase.storage
-      .from(STORAGE_BUCKET_NAME)
-      .upload(storagePath, file, {
-        contentType: fileType,
-        cacheControl: "31536000", // 1 year CDN cache
-        upsert: false,
+    let response: Response;
+    try {
+      response = await fetch(UPLOAD_ENDPOINT, {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin",
+        signal: controller.signal,
       });
-
-    const { error: uploadError } = await Promise.race([
-      uploadOperation,
-      cancelOrTimeoutPromise,
-    ]);
-
-    if (uploadError) {
-      const errorMessage = uploadError.message?.toLowerCase() || "";
-      const statusCode = (uploadError as unknown as { statusCode?: number }).statusCode;
-
-      if (statusCode === 413 || errorMessage.includes("payload too large") || errorMessage.includes("entity too large")) {
-        throw new StorageUploadError(
-          "La imagen supera el límite de tamaño permitido por el servidor.",
-          "PAYLOAD_TOO_LARGE",
-          413,
-          uploadError
-        );
+    } catch (err) {
+      if (timedOut) {
+        throw new StorageUploadError(TIMEOUT_MESSAGE, "TIMEOUT_ERROR", 408, err);
       }
-
-      if (
-        statusCode === 401 ||
-        statusCode === 403 ||
-        errorMessage.includes("row-level security") ||
-        errorMessage.includes("policy") ||
-        errorMessage.includes("unauthorized") ||
-        errorMessage.includes("permission denied")
-      ) {
-        throw new StorageUploadError(
-          "No cuentas con permisos para subir fotografías. Debes iniciar sesión con tu cuenta institucional.",
-          "UNAUTHORIZED",
-          403,
-          uploadError
-        );
+      if (options?.signal?.aborted || (err instanceof Error && err.name === "AbortError")) {
+        throw new StorageUploadError(ABORTED_MESSAGE, "ABORTED", undefined, err);
       }
+      throw new StorageUploadError(NETWORK_MESSAGE, "NETWORK_ERROR", undefined, err);
+    }
 
-      if (errorMessage.includes("bucket not found")) {
-        throw new StorageUploadError(
-          "El contenedor de almacenamiento no se encuentra disponible temporalmente.",
-          "BUCKET_NOT_FOUND",
-          404,
-          uploadError
-        );
-      }
+    if (!response.ok) {
+      throw toUploadError(response.status, await readJson<UploadApiError>(response));
+    }
 
-      if (errorMessage.includes("failed to fetch") || errorMessage.includes("network") || errorMessage.includes("timeout")) {
-        throw new StorageUploadError(
-          "No se pudo subir la imagen por problemas de conexión. Por favor, reintenta el envío.",
-          "NETWORK_ERROR",
-          undefined,
-          uploadError
-        );
-      }
-
+    const data = await readJson<UploadApiSuccess>(response);
+    if (!data?.path || !data.storagePath) {
       throw new StorageUploadError(
-        uploadError.message || "Error al subir la fotografía a nuestro almacenamiento seguro.",
+        "El servidor devolvió una respuesta inesperada al guardar la fotografía.",
         "UPLOAD_FAILED",
-        statusCode,
-        uploadError
+        response.status
       );
     }
 
-    // 6. Complete progress & retrieve public URL
+    // 5. Complete progress & return the local public path
     options?.onProgress?.(100);
 
-    const { data: urlData } = supabase.storage
-      .from(STORAGE_BUCKET_NAME)
-      .getPublicUrl(storagePath);
-
     return {
-      publicUrl: urlData.publicUrl,
-      storagePath,
-      fileSize: file.size,
+      publicUrl: data.path,
+      storagePath: data.storagePath,
+      fileSize: data.size ?? file.size,
     };
-  } catch (err) {
-    if (err instanceof StorageUploadError) {
-      throw err;
-    }
-
-    if (
-      (err instanceof Error && err.name === "AbortError") ||
-      options?.signal?.aborted
-    ) {
-      throw new StorageUploadError(
-        "La subida de la imagen fue cancelada.",
-        "ABORTED",
-        undefined,
-        err
-      );
-    }
-
-    throw err;
   } finally {
     clearInterval(progressInterval);
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
-    if (abortListener && options?.signal) {
-      options.signal.removeEventListener("abort", abortListener);
-    }
+    options?.signal?.removeEventListener("abort", abortListener);
   }
 }
 
 /**
- * Deletes a suggestion image from storage. Useful for rollback or when discarding
- * an already-uploaded orphan image.
+ * Deletes a suggestion image from the on-premise storage. Useful for rollback or
+ * when discarding an already-uploaded orphan image. Requires a moderator session.
  */
-export async function deleteSuggestionImage(
-  storagePath: string,
-  client?: SupabaseClient<Database>
-): Promise<void> {
+export async function deleteSuggestionImage(storagePath: string): Promise<void> {
   if (!storagePath) return;
 
-  const supabase = client ?? createClient();
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET_NAME)
-    .remove([storagePath]);
-
-  if (error) {
+  let response: Response;
+  try {
+    response = await fetch(
+      `${UPLOAD_ENDPOINT}?path=${encodeURIComponent(storagePath)}`,
+      { method: "DELETE", credentials: "same-origin" }
+    );
+  } catch (err) {
     throw new StorageUploadError(
       "No se pudo eliminar la imagen del almacenamiento.",
       "DELETE_ERROR",
       undefined,
-      error
+      err
+    );
+  }
+
+  if (!response.ok && response.status !== 404) {
+    throw new StorageUploadError(
+      "No se pudo eliminar la imagen del almacenamiento.",
+      "DELETE_ERROR",
+      response.status
     );
   }
 }

@@ -3,11 +3,28 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Top-level mocks for server actions & Next.js navigation
-let currentMockClient: Record<string, unknown> | null = null;
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(() => Promise.resolve(currentMockClient)),
+const e2e = vi.hoisted(() => ({
+  resolveSession: vi.fn(),
+  getVerifiedAdmin: vi.fn(),
+  createAnonymousSuggestion: vi.fn(),
+  fetchTicketDetails: vi.fn(),
+  updateSuggestionStatusById: vi.fn(),
+  submitOfficialResponse: vi.fn(),
 }));
+
+vi.mock("@/lib/auth/session", () => ({
+  resolveSession: e2e.resolveSession,
+  getVerifiedAdmin: e2e.getVerifiedAdmin,
+}));
+
+vi.mock("@/lib/services/suggestionService", () => ({
+  createAnonymousSuggestion: e2e.createAnonymousSuggestion,
+  fetchTicketDetails: e2e.fetchTicketDetails,
+  updateSuggestionStatusById: e2e.updateSuggestionStatusById,
+  submitOfficialResponse: e2e.submitOfficialResponse,
+}));
+
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -31,8 +48,6 @@ import {
   compressImage,
 } from "@/lib/utils/imageCompression";
 import { suggestionFormSchema } from "@/lib/validations/suggestionSchema";
-import type { Database } from "@/types/database.types";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Sprint 9 — End-to-End Critical Integration Test Suite (Issue 9.4)
@@ -47,7 +62,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 describe("Sprint 9 Critical E2E & Production Integration Suite (Issue 9.4)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    currentMockClient = null;
+    e2e.resolveSession.mockResolvedValue({
+      ok: true,
+      session: { email: "estudiante.regular@unsch.edu.pe", isAdmin: false },
+    });
+    e2e.getVerifiedAdmin.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -223,54 +242,60 @@ describe("Sprint 9 Critical E2E & Production Integration Suite (Issue 9.4)", () 
   // PRUEBA 3: Anonimato Disociado
   // =========================================================================
   describe("Prueba 3: Anonimato Disociado hacia la Base de Datos (Issue 9.4)", () => {
-    it("asegura que el payload hacia la RPC submit_anonymous_suggestion NO adjunte user_id ni email", async () => {
-      let capturedRpcName = "";
-      let capturedPayload: Record<string, unknown> | null = null;
-
-      const mockSupabase = {
-        rpc: vi.fn((rpcName: string, payload: Record<string, unknown>) => {
-          capturedRpcName = rpcName;
-          capturedPayload = payload;
-          return Promise.resolve({
-            data: {
-              ticket_code: "UNSCH-A9X2",
-              created_at: new Date().toISOString(),
-            },
-            error: null,
-          });
-        }),
-      } as unknown as SupabaseClient<Database>;
+    it("asegura que el ticket devuelto y la alerta NO expongan user_id ni email del estudiante", async () => {
+      e2e.createAnonymousSuggestion.mockResolvedValue({
+        id: "550e8400-e29b-41d4-a716-446655440000",
+        ticket_code: "UNSCH-A9X2",
+        shift: "lunch",
+        category: "hygiene",
+        status: "pending",
+        created_at: new Date().toISOString(),
+      });
 
       const submissionPayload = {
         shift: "lunch" as const,
         category: "hygiene" as const,
         message: "El personal de cocina utilizó mascarillas y cofias reglamentarias.",
-        photoUrl: "https://mock.supabase.co/storage/v1/object/public/evidence/img.webp",
+        photoUrl: "/uploads/2026/10/3f2b8c1e-7a4d-4e9b-9c1a-5d6e7f8a9b0c.webp",
       };
 
-      const result = await submitSuggestion(submissionPayload, {
-        supabase: mockSupabase,
-      });
+      const result = await submitSuggestion(submissionPayload);
 
       expect(result.success).toBe(true);
-      expect(capturedRpcName).toBe("submit_anonymous_suggestion");
-      expect(capturedPayload).not.toBeNull();
 
-      if (capturedPayload) {
-        // Enforce strict dissociated payload schema
-        expect(capturedPayload).toHaveProperty("p_shift", "lunch");
-        expect(capturedPayload).toHaveProperty("p_category", "hygiene");
-        expect(capturedPayload).toHaveProperty("p_message", submissionPayload.message);
-        expect(capturedPayload).toHaveProperty("p_photo_url", submissionPayload.photoUrl);
+      // The e-mail is handed to the service solely to derive the ephemeral hash.
+      expect(e2e.createAnonymousSuggestion).toHaveBeenCalledWith({
+        email: "estudiante.regular@unsch.edu.pe",
+        shift: "lunch",
+        category: "hygiene",
+        message: submissionPayload.message,
+        photoUrl: submissionPayload.photoUrl,
+      });
 
-        // Obligatory Anonymity invariants
-        expect(capturedPayload).not.toHaveProperty("user_id");
-        expect(capturedPayload).not.toHaveProperty("p_user_id");
-        expect(capturedPayload).not.toHaveProperty("email");
-        expect(capturedPayload).not.toHaveProperty("p_email");
-        expect(capturedPayload).not.toHaveProperty("student_id");
-        expect(capturedPayload).not.toHaveProperty("author");
+      // Obligatory Anonymity invariants on everything returned to the browser
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain("estudiante.regular");
+      expect(serialized).not.toContain("@unsch.edu.pe");
+      if (result.success) {
+        expect(result.data).not.toHaveProperty("user_id");
+        expect(result.data).not.toHaveProperty("email");
+        expect(result.data).not.toHaveProperty("student_id");
+        expect(result.data).not.toHaveProperty("author");
       }
+    });
+
+    it("rechaza el envío cuando no existe una sesión institucional activa", async () => {
+      e2e.resolveSession.mockResolvedValue({ ok: false, reason: "unauthenticated" });
+
+      const result = await submitSuggestion({
+        shift: "lunch",
+        category: "menu",
+        message: "Intento de envío sin haber iniciado sesión institucional.",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("inicia sesión con tu correo institucional");
+      expect(e2e.createAnonymousSuggestion).not.toHaveBeenCalled();
     });
   });
 
@@ -302,34 +327,15 @@ describe("Sprint 9 Critical E2E & Production Integration Suite (Issue 9.4)", () 
         updated_at: "2026-09-28T14:30:00Z",
       };
 
-      currentMockClient = {
-        from: vi.fn((table: string) => {
-          if (table === "suggestions") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: mockSuggestionRow,
-                error: null,
-              }),
-            };
-          }
-          if (table === "ticket_responses") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              order: vi.fn().mockResolvedValue({
-                data: [mockOfficialResponse],
-                error: null,
-              }),
-            };
-          }
-          return {};
-        }),
-      };
+      e2e.fetchTicketDetails.mockResolvedValue({
+        suggestion: mockSuggestionRow,
+        responses: [mockOfficialResponse],
+      });
 
       // Query with mixed case and leading/trailing whitespace
       const result = await lookupTicket({ code: "  unsch-t92m  " });
+
+      expect(e2e.fetchTicketDetails).toHaveBeenCalledWith("UNSCH-T92M");
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -346,33 +352,8 @@ describe("Sprint 9 Critical E2E & Production Integration Suite (Issue 9.4)", () 
   // =========================================================================
   describe("Prueba 5: Blindaje Admin y Manejo Didáctico 403 (Issue 9.4)", () => {
     it("bloquea operaciones de moderación con error 403 cuando el usuario no está en la tabla admins", async () => {
-      // Mock client returning an active user session but null in admins table
-      currentMockClient = {
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: {
-              user: {
-                id: "student-user-uuid",
-                email: "estudiante.regular@unsch.edu.pe",
-              },
-            },
-            error: null,
-          }),
-        },
-        from: vi.fn((table: string) => {
-          if (table === "admins") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: null, // User is NOT an admin
-                error: null,
-              }),
-            };
-          }
-          return {};
-        }),
-      };
+      // Active institutional session whose e-mail is NOT in the admins table
+      e2e.getVerifiedAdmin.mockResolvedValue(null);
 
       const statusResult = await updateSuggestionStatus("sugg-test-id", "in_review");
       expect(statusResult.success).toBe(false);
@@ -384,6 +365,9 @@ describe("Sprint 9 Critical E2E & Production Integration Suite (Issue 9.4)", () 
       });
       expect(responseResult.success).toBe(false);
       expect(responseResult.error).toContain("Acceso no autorizado");
+
+      expect(e2e.updateSuggestionStatusById).not.toHaveBeenCalled();
+      expect(e2e.submitOfficialResponse).not.toHaveBeenCalled();
     });
 
     it("renderiza el componente UnauthorizedAccessState con código 403 y diseño Crimson Heritage", () => {

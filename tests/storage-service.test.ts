@@ -1,4 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -8,7 +7,6 @@ import {
   StorageUploadError,
   uploadSuggestionImage,
 } from "@/lib/services/storageService";
-import type { Database } from "@/types/database.types";
 
 describe("generateStoragePath", () => {
   it("generates partitioned path matching YYYY/MM/uuid-v4.webp", () => {
@@ -82,131 +80,140 @@ describe("uploadSuggestionImage defensive validations", () => {
   });
 });
 
-describe("uploadSuggestionImage Supabase storage pipeline", () => {
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+describe("uploadSuggestionImage on-premise storage pipeline", () => {
   const mockFile = new File(
     [new Uint8Array(120 * 1024)],
     "evidencia_bandeja.webp",
     { type: "image/webp" }
   );
 
-  let mockUpload: ReturnType<typeof vi.fn>;
-  let mockGetPublicUrl: ReturnType<typeof vi.fn>;
-  let mockRemove: ReturnType<typeof vi.fn>;
-  let mockClient: SupabaseClient<Database>;
+  let mockFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mockUpload = vi.fn().mockResolvedValue({ data: { path: "some/path.webp" }, error: null });
-    mockGetPublicUrl = vi.fn().mockReturnValue({
-      data: { publicUrl: "https://xyz.supabase.co/storage/v1/object/public/suggestion-media/2026/09/uuid.webp" },
-    });
-    mockRemove = vi.fn().mockResolvedValue({ data: [], error: null });
-
-    mockClient = {
-      storage: {
-        from: vi.fn().mockReturnValue({
-          upload: mockUpload,
-          getPublicUrl: mockGetPublicUrl,
-          remove: mockRemove,
-        }),
-      },
-    } as unknown as SupabaseClient<Database>;
+    mockFetch = vi.fn().mockResolvedValue(
+      jsonResponse(201, {
+        path: "/uploads/2026/10/uuid.webp",
+        storagePath: "2026/10/uuid.webp",
+        size: 120 * 1024,
+      })
+    );
+    vi.stubGlobal("fetch", mockFetch);
   });
 
-  it("successfully uploads to suggestion-media with 1-year cacheControl and returns publicUrl", async () => {
-    const result = await uploadSuggestionImage(mockFile, { client: mockClient });
+  it("posts the image as FormData to /api/upload and returns the local public path", async () => {
+    const result = await uploadSuggestionImage(mockFile, { folder: "lunch" });
 
-    expect(mockClient.storage.from).toHaveBeenCalledWith("suggestion-media");
-    expect(mockUpload).toHaveBeenCalledWith(
-      expect.stringMatching(/^\d{4}\/\d{2}\/[0-9a-f-]{36}\.webp$/),
-      mockFile,
-      {
-        contentType: "image/webp",
-        cacheControl: "31536000",
-        upsert: false,
-      }
-    );
-    expect(result.publicUrl).toBe(
-      "https://xyz.supabase.co/storage/v1/object/public/suggestion-media/2026/09/uuid.webp"
-    );
-    expect(result.fileSize).toBe(120 * 1024);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/upload");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("same-origin");
+
+    const body = init.body as FormData;
+    const sent = body.get("file") as File;
+    expect(sent.type).toBe("image/webp");
+    expect(sent.size).toBe(120 * 1024);
+    // The original file name never leaves the device.
+    expect(sent.name).toBe("upload.webp");
+    expect(body.get("folder")).toBe("lunch");
+
+    expect(result).toEqual({
+      publicUrl: "/uploads/2026/10/uuid.webp",
+      storagePath: "2026/10/uuid.webp",
+      fileSize: 120 * 1024,
+    });
   });
 
   it("translates 413 Payload Too Large server errors into student-friendly Spanish", async () => {
-    mockUpload.mockResolvedValueOnce({
-      data: null,
-      error: { message: "Payload too large", statusCode: 413 },
-    });
+    mockFetch.mockResolvedValueOnce(new Response("Payload too large", { status: 413 }));
 
-    await expect(
-      uploadSuggestionImage(mockFile, { client: mockClient })
-    ).rejects.toThrow(
+    await expect(uploadSuggestionImage(mockFile)).rejects.toThrow(
       "La imagen supera el límite de tamaño permitido por el servidor."
     );
   });
 
-  it("translates RLS / permission errors into actionable institutional guidance", async () => {
-    mockUpload.mockResolvedValueOnce({
-      data: null,
-      error: { message: "new row violates row-level security policy", statusCode: 403 },
-    });
+  it("translates session / permission errors into actionable institutional guidance", async () => {
+    mockFetch.mockResolvedValueOnce(new Response(null, { status: 401 }));
 
-    await expect(
-      uploadSuggestionImage(mockFile, { client: mockClient })
-    ).rejects.toThrow(
-      "No cuentas con permisos para subir fotografías. Debes iniciar sesión con tu cuenta institucional."
+    await expect(uploadSuggestionImage(mockFile)).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message:
+        "No cuentas con permisos para subir fotografías. Debes iniciar sesión con tu cuenta institucional.",
+    });
+  });
+
+  it("prefers the message returned by the server when present", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(415, {
+        error: {
+          code: "INVALID_FORMAT",
+          message: "El contenido del archivo no corresponde a una imagen WebP o JPEG válida.",
+        },
+      })
     );
+
+    await expect(uploadSuggestionImage(mockFile)).rejects.toMatchObject({
+      code: "INVALID_FORMAT",
+      status: 415,
+      message: "El contenido del archivo no corresponde a una imagen WebP o JPEG válida.",
+    });
   });
 
   it("translates connection / network errors clearly", async () => {
-    mockUpload.mockResolvedValueOnce({
-      data: null,
-      error: { message: "Failed to fetch from network", statusCode: 0 },
-    });
+    mockFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
-    await expect(
-      uploadSuggestionImage(mockFile, { client: mockClient })
-    ).rejects.toThrow(
-      "No se pudo subir la imagen por problemas de conexión. Por favor, reintenta el envío."
-    );
+    await expect(uploadSuggestionImage(mockFile)).rejects.toMatchObject({
+      code: "NETWORK_ERROR",
+      message: "No se pudo subir la imagen por problemas de conexión. Por favor, reintenta el envío.",
+    });
+  });
+
+  it("rejects a success response without the stored path", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(201, {}));
+
+    await expect(uploadSuggestionImage(mockFile)).rejects.toMatchObject({ code: "UPLOAD_FAILED" });
   });
 });
 
 describe("deleteSuggestionImage", () => {
-  let mockRemove: ReturnType<typeof vi.fn>;
-  let mockClient: SupabaseClient<Database>;
+  let mockFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mockRemove = vi.fn().mockResolvedValue({ data: [], error: null });
-    mockClient = {
-      storage: {
-        from: vi.fn().mockReturnValue({
-          remove: mockRemove,
-        }),
-      },
-    } as unknown as SupabaseClient<Database>;
+    mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", mockFetch);
   });
 
-  it("invokes storage remove on the suggestion-media bucket", async () => {
-    const path = "2026/09/foto-descartada.webp";
-    await deleteSuggestionImage(path, mockClient);
+  it("sends a DELETE request for the storage path", async () => {
+    await deleteSuggestionImage("2026/09/foto-descartada.webp");
 
-    expect(mockClient.storage.from).toHaveBeenCalledWith("suggestion-media");
-    expect(mockRemove).toHaveBeenCalledWith([path]);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/upload?path=2026%2F09%2Ffoto-descartada.webp",
+      { method: "DELETE", credentials: "same-origin" }
+    );
   });
 
   it("handles empty path safely without network requests", async () => {
-    await deleteSuggestionImage("", mockClient);
-    expect(mockClient.storage.from).not.toHaveBeenCalled();
+    await deleteSuggestionImage("");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("treats an already missing image as deleted", async () => {
+    mockFetch.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    await expect(deleteSuggestionImage("2026/09/ausente.webp")).resolves.toBeUndefined();
   });
 
   it("throws a StorageUploadError if deletion fails", async () => {
-    mockRemove.mockResolvedValueOnce({
-      data: null,
-      error: { message: "Database connection failed" },
-    });
+    mockFetch.mockResolvedValueOnce(new Response(null, { status: 500 }));
 
-    await expect(
-      deleteSuggestionImage("2026/09/error.webp", mockClient)
-    ).rejects.toThrow("No se pudo eliminar la imagen del almacenamiento.");
+    await expect(deleteSuggestionImage("2026/09/error.webp")).rejects.toThrow(
+      "No se pudo eliminar la imagen del almacenamiento."
+    );
   });
 });

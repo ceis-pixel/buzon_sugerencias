@@ -6,8 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
   routerReplace: vi.fn(),
-  getSession: vi.fn(),
-  onAuthStateChange: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/authActions", () => ({
@@ -18,14 +16,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mocks.routerReplace }),
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
-    auth: {
-      getSession: mocks.getSession,
-      onAuthStateChange: mocks.onAuthStateChange,
-    },
-  }),
-}));
 
 // Import after mocks are defined
 import { LogoutModal } from "@/components/auth/LogoutModal";

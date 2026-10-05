@@ -1,6 +1,22 @@
 import { z } from "zod";
 
+import { isDatabaseOrInternalError, sanitizeDatabaseError } from "@/lib/errors/dbErrorHandler";
+import { isLocalUploadPath } from "@/lib/storage/uploadPolicy";
 import type { ShiftType, SuggestionCategory } from "@/types/database.types";
+
+/**
+ * Attached photo reference: strictly a canonical local on-premise path
+ * (`/uploads/[shift/]YYYY/MM/uuid.webp`). External HTTP(S) URLs are strictly rejected.
+ */
+const photoReferenceSchema = z
+  .string()
+  .refine(
+    (value) => isLocalUploadPath(value),
+    "La ruta de la fotografía adjunta no es válida. Solo se admiten rutas locales generadas por el sistema.",
+  )
+  .nullable()
+  .optional()
+  .or(z.literal(""));
 
 export const suggestionShifts: readonly [ShiftType, ...ShiftType[]] = [
   "breakfast",
@@ -49,18 +65,8 @@ export const submitSuggestionSchema = z.object({
     .trim()
     .min(10, "El mensaje es demasiado corto (mínimo 10 caracteres).")
     .max(500, "El mensaje excede el límite máximo de 500 caracteres."),
-  photoUrl: z
-    .string()
-    .url("La URL de la fotografía adjunta no es válida.")
-    .nullable()
-    .optional()
-    .or(z.literal("")),
-  photo_url: z
-    .string()
-    .url("La URL de la fotografía adjunta no es válida.")
-    .nullable()
-    .optional()
-    .or(z.literal("")),
+  photoUrl: photoReferenceSchema,
+  photo_url: photoReferenceSchema,
 });
 
 export type SubmitSuggestionInput = z.infer<typeof submitSuggestionSchema>;
@@ -119,6 +125,14 @@ export function mapSuggestionError(error: unknown): string {
 
   if (message.includes("permission denied") || message.includes("42501")) {
     return "No tienes permisos suficientes para registrar sugerencias. Inicia sesión institucional.";
+  }
+
+  // Centralized shield: intercept database exceptions without leaking tables, columns, paths or queries
+  if (isDatabaseOrInternalError(error)) {
+    return sanitizeDatabaseError(
+      error,
+      "Ocurrió un problema al enviar tu sugerencia. Por favor, intenta de nuevo en unos momentos.",
+    ).safeMessage;
   }
 
   return "Ocurrió un problema al enviar tu sugerencia. Por favor, intenta de nuevo en unos momentos.";

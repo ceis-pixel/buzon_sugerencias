@@ -6,8 +6,10 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Vercel runs the Next.js server adapter, including actions,
-  // request cookies and API routes. Static export would disable these features.
+  // On-premise target (OTI UNSCH): emits a minimal, self-contained Node.js
+  // server in .next/standalone that runs inside the Docker image without
+  // node_modules. Server Actions, cookies and Route Handlers remain available.
+  output: "standalone",
   reactStrictMode: true,
   compress: true,
   poweredByHeader: false,
@@ -19,6 +21,7 @@ const nextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },
       {
@@ -36,22 +39,11 @@ const nextConfig = {
     ];
   },
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "lh3.googleusercontent.com",
-        port: "",
-        pathname: "/**",
-        search: "",
-      },
-      {
-        protocol: "https",
-        hostname: "*.supabase.co",
-        port: "",
-        pathname: "/storage/v1/object/public/**",
-        search: "",
-      },
-    ],
+    // Photos are already compressed client-side to WebP (~120 KB) with the
+    // Canvas API, so the server-side optimizer would only burn OTI CPU.
+    // With unoptimized images next/image serves the original src as-is,
+    // including local "/uploads/..." paths and legacy remote URLs.
+    unoptimized: true,
   },
 };
 

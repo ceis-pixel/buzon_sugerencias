@@ -255,7 +255,7 @@ export function AnalyticsDashboardView({
   const handleTriggerMaintenance = async () => {
     if (
       !confirm(
-        "¿Deseas ejecutar la depuración de almacenamiento de fotos resueltas mayores a 90 días? Esta acción liberará espacio de la cuota de Supabase Storage preservando los registros estadísticos.",
+        "¿Deseas ejecutar la depuración de almacenamiento de fotos resueltas mayores a 90 días? Esta acción liberará espacio en el almacenamiento institucional preservando los registros estadísticos.",
       )
     ) {
       return;
@@ -661,7 +661,7 @@ export function AnalyticsDashboardView({
             </div>
             <div>
               <h3 className="text-base font-extrabold text-gray-900">
-                Sostenibilidad del Almacenamiento (Supabase Free Tier)
+                Sostenibilidad del Almacenamiento Institucional
               </h3>
               <p className="text-xs text-neutral-gray">
                 Protección del límite de 1 GB. Rutina de depuración de evidencia fotográfica de casos resueltos con más de 90 días.

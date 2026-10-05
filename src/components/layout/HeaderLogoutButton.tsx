@@ -1,7 +1,8 @@
 "use client";
 
 import { LogOut } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useState } from "react";
 
 import dynamic from "next/dynamic";
 
@@ -9,8 +10,6 @@ const LogoutModal = dynamic(
   () => import("@/components/auth/LogoutModal").then((mod) => mod.LogoutModal),
   { ssr: false }
 );
-
-import { createClient } from "@/lib/supabase/client";
 
 /**
  * Client island that renders the secure logout button only when an active session
@@ -20,26 +19,10 @@ import { createClient } from "@/lib/supabase/client";
  * Server Component and avoid unnecessary client-side re-renders.
  */
 export function HeaderLogoutButton() {
-  const [hasSession, setHasSession] = useState(false);
+  // Kept in sync by the SessionProvider (login, logout and cross-tab changes).
+  const { status } = useSession();
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  useEffect(() => {
-    const supabase = createClient();
-
-    // Synchronous initial read — avoids a flash of the button on public pages.
-    supabase.auth.getSession().then(({ data }) => {
-      setHasSession(Boolean(data.session));
-    });
-
-    // Keep in sync with real-time auth state changes (login / logout / token refresh).
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setHasSession(Boolean(session));
-    });
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
+  const hasSession = status === "authenticated";
 
   if (!hasSession) return null;
 

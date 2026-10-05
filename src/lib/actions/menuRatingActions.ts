@@ -1,10 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getVerifiedAdmin } from "@/lib/actions/adminActions";
-import { createClient } from "@/lib/supabase/server";
+import { getLimaDate } from "@/lib/auth/rateHash";
+import { getInstitutionalSession, getVerifiedAdmin } from "@/lib/auth/session";
+import {
+  createMenuRating,
+  fetchRatingsForMenus,
+  fetchRecentMenus,
+  findMenuByDateAndShift,
+  hasRatedToday,
+  MenuRatingError,
+  setMenuActive,
+  updateMenu,
+  upsertMenu,
+  type MenuPayload,
+  type RatingScores,
+} from "@/lib/services/menuService";
 import {
   calculateRatingStats,
   dailyMenuSchema,
@@ -16,7 +28,6 @@ import {
 import type {
   DailyMenuRow,
   DailyMenuWithStats,
-  Database,
   ShiftType,
 } from "@/types/database.types";
 
@@ -33,13 +44,22 @@ export interface DailyMenuActionResponse<T> {
   message: string;
 }
 
+function revalidateMenuPaths(): void {
+  try {
+    revalidatePath("/");
+    revalidatePath("/admin/analitica");
+    revalidatePath("/admin/menus");
+  } catch {
+    // In isolated test environments revalidatePath is a no-op
+  }
+}
+
 /**
  * Submits an anonymous, zero-knowledge menu rating for the current meal shift.
  * Enforces strictly 1 vote per authenticated student per shift per day.
  */
 export async function submitMenuRating(
   input: MenuRatingInput,
-  options?: { supabase?: SupabaseClient<Database> },
 ): Promise<MenuRatingResponse> {
   const validation = menuRatingSchema.safeParse(input);
 
@@ -53,37 +73,24 @@ export async function submitMenuRating(
   }
 
   try {
-    const supabase = options?.supabase ?? (await createClient());
-
-    const { data, error } = await supabase.rpc("submit_menu_rating", {
-      p_menu_id: validation.data.menuId,
-      p_shift: validation.data.shift,
-      p_rating_main: validation.data.ratingMain,
-      p_rating_side: validation.data.ratingSide ?? null,
-      p_rating_beverage: validation.data.ratingBeverage ?? null,
-    });
-
-    if (error) {
-      const mapped = mapMenuRatingError(error);
-      const hasAlreadyRated =
-        mapped.includes("Ya registraste tu opinión") ||
-        error.message?.includes("Ya registraste tu opinión");
-
+    const session = await getInstitutionalSession();
+    if (!session) {
       return {
         success: false,
-        message: mapped,
-        hasAlreadyRated,
+        message: "Debes iniciar sesión con tu cuenta institucional @unsch.edu.pe para calificar.",
       };
     }
 
-    // Cache revalidation across public and admin pages
-    try {
-      revalidatePath("/");
-      revalidatePath("/admin/analitica");
-      revalidatePath("/admin/menus");
-    } catch {
-      // In isolated test environments revalidatePath is a no-op
-    }
+    const data = await createMenuRating({
+      email: session.email,
+      menuId: validation.data.menuId,
+      shift: validation.data.shift,
+      ratingMain: validation.data.ratingMain,
+      ratingSide: validation.data.ratingSide ?? null,
+      ratingBeverage: validation.data.ratingBeverage ?? null,
+    });
+
+    revalidateMenuPaths();
 
     return {
       success: true,
@@ -91,11 +98,19 @@ export async function submitMenuRating(
       data,
     };
   } catch (err) {
-    const mapped = mapMenuRatingError(err);
+    if (err instanceof MenuRatingError) {
+      return {
+        success: false,
+        message: mapMenuRatingError(err),
+        hasAlreadyRated: err.alreadyRated,
+      };
+    }
+
+    console.error("[submitMenuRating] Error:", (err as Error).message);
     return {
       success: false,
-      message: mapped,
-      hasAlreadyRated: mapped.includes("Ya registraste tu opinión"),
+      message: "Ocurrió un error al registrar la calificación. Intenta nuevamente.",
+      hasAlreadyRated: false,
     };
   }
 }
@@ -103,24 +118,25 @@ export async function submitMenuRating(
 /**
  * Checks if the current authenticated student has already rated the specified shift today.
  */
-export async function checkHasUserRated(
-  shift: ShiftType,
-  options?: { supabase?: SupabaseClient<Database> },
-): Promise<boolean> {
+export async function checkHasUserRated(shift: ShiftType): Promise<boolean> {
   try {
-    const supabase = options?.supabase ?? (await createClient());
-    const { data, error } = await supabase.rpc("has_user_rated_today", {
-      p_shift: shift,
-    });
+    const session = await getInstitutionalSession();
+    if (!session) return false;
 
-    if (error || typeof data !== "boolean") {
-      return false;
-    }
-
-    return data;
+    return await hasRatedToday(session.email, shift);
   } catch {
     return false;
   }
+}
+
+function groupRatings(ratings: RatingScores[]): Map<string, RatingScores[]> {
+  const byMenu = new Map<string, RatingScores[]>();
+  for (const rating of ratings) {
+    const list = byMenu.get(rating.menu_id) || [];
+    list.push(rating);
+    byMenu.set(rating.menu_id, list);
+  }
+  return byMenu;
 }
 
 /**
@@ -129,36 +145,23 @@ export async function checkHasUserRated(
 export async function getDailyMenuWithStats(
   shift: ShiftType,
   dateIso?: string,
-  options?: { supabase?: SupabaseClient<Database> },
 ): Promise<DailyMenuWithStats | null> {
   try {
-    const supabase = options?.supabase ?? (await createClient());
-    const targetDate = dateIso || new Date().toISOString().split("T")[0];
+    const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(dateIso ?? "") ? dateIso! : getLimaDate();
 
-    const { data: menu, error: menuError } = await supabase
-      .from("daily_menus")
-      .select("*")
-      .eq("date", targetDate)
-      .eq("shift", shift)
-      .maybeSingle();
-
-    if (menuError || !menu) {
+    const menu = await findMenuByDateAndShift(targetDate, shift);
+    if (!menu) {
       return null;
     }
 
-    const { data: ratings, error: ratingsError } = await supabase
-      .from("menu_ratings")
-      .select("rating_main, rating_side, rating_beverage")
-      .eq("menu_id", menu.id);
-
-    const stats = calculateRatingStats(ratingsError ? [] : ratings ?? []);
+    const ratings = await fetchRatingsForMenus([menu.id]);
 
     return {
-      ...(menu as DailyMenuRow),
-      stats,
+      ...menu,
+      stats: calculateRatingStats(ratings),
     };
   } catch (err) {
-    console.error("[getDailyMenuWithStats] Error querying menu:", err);
+    console.error("[getDailyMenuWithStats] Error querying menu:", (err as Error).message);
     return null;
   }
 }
@@ -169,10 +172,8 @@ export async function getDailyMenuWithStats(
  */
 export async function saveDailyMenu(
   input: DailyMenuInput,
-  options?: { supabase?: SupabaseClient<Database> },
 ): Promise<DailyMenuActionResponse<DailyMenuRow>> {
   try {
-    const supabase = options?.supabase ?? (await createClient());
     const admin = await getVerifiedAdmin();
 
     if (!admin) {
@@ -192,57 +193,28 @@ export async function saveDailyMenu(
       };
     }
 
-    const payload = {
+    const payload: MenuPayload = {
       date: validation.data.date,
       shift: validation.data.shift,
-      main_dish: validation.data.mainDish,
-      side_dish: validation.data.sideDish || null,
+      mainDish: validation.data.mainDish,
+      sideDish: validation.data.sideDish || null,
       beverage: validation.data.beverage || null,
-      is_active: validation.data.isActive,
+      isActive: validation.data.isActive,
     };
 
-    let resultMenu: DailyMenuRow | null = null;
+    const resultMenu = validation.data.id
+      ? await updateMenu(validation.data.id, payload)
+      : await upsertMenu(payload);
 
-    if (validation.data.id) {
-      const { data, error } = await supabase
-        .from("daily_menus")
-        .update(payload)
-        .eq("id", validation.data.id)
-        .select("*")
-        .single();
-
-      if (error) {
-        return {
-          success: false,
-          data: null,
-          message: `Error al actualizar el menú: ${error.message}`,
-        };
-      }
-      resultMenu = data as DailyMenuRow;
-    } else {
-      const { data, error } = await supabase
-        .from("daily_menus")
-        .upsert(payload, { onConflict: "date,shift" })
-        .select("*")
-        .single();
-
-      if (error) {
-        return {
-          success: false,
-          data: null,
-          message: `Error al guardar el menú: ${error.message}`,
-        };
-      }
-      resultMenu = data as DailyMenuRow;
+    if (!resultMenu) {
+      return {
+        success: false,
+        data: null,
+        message: "Error al actualizar el menú: el registro solicitado no existe.",
+      };
     }
 
-    try {
-      revalidatePath("/");
-      revalidatePath("/admin/menus");
-      revalidatePath("/admin/analitica");
-    } catch {
-      // In tests
-    }
+    revalidateMenuPaths();
 
     return {
       success: true,
@@ -250,11 +222,14 @@ export async function saveDailyMenu(
       message: "Menú publicado y actualizado correctamente.",
     };
   } catch (err) {
-    console.error("[saveDailyMenu] Exception:", err);
+    console.error("[saveDailyMenu] Exception:", (err as Error).message);
     return {
       success: false,
       data: null,
-      message: "Ocurrió una excepción al guardar la programación del menú.",
+      message:
+        (err as { code?: string }).code === "23505"
+          ? "Ya existe un menú publicado para esa fecha y turno."
+          : "Ocurrió una excepción al guardar la programación del menú.",
     };
   }
 }
@@ -265,10 +240,8 @@ export async function saveDailyMenu(
 export async function toggleMenuStatus(
   menuId: string,
   isActive: boolean,
-  options?: { supabase?: SupabaseClient<Database> },
 ): Promise<DailyMenuActionResponse<DailyMenuRow>> {
   try {
-    const supabase = options?.supabase ?? (await createClient());
     const admin = await getVerifiedAdmin();
 
     if (!admin) {
@@ -279,32 +252,21 @@ export async function toggleMenuStatus(
       };
     }
 
-    const { data, error } = await supabase
-      .from("daily_menus")
-      .update({ is_active: isActive })
-      .eq("id", menuId)
-      .select("*")
-      .single();
+    const menu = await setMenuActive(menuId, isActive);
 
-    if (error) {
+    if (!menu) {
       return {
         success: false,
         data: null,
-        message: `Error al actualizar estado del menú: ${error.message}`,
+        message: "Error al actualizar estado del menú: el registro solicitado no existe.",
       };
     }
 
-    try {
-      revalidatePath("/");
-      revalidatePath("/admin/menus");
-      revalidatePath("/admin/analitica");
-    } catch {
-      // In tests
-    }
+    revalidateMenuPaths();
 
     return {
       success: true,
-      data: data as DailyMenuRow,
+      data: menu,
       message: isActive
         ? "Recepción de calificaciones reabierta con éxito."
         : "Recepción de calificaciones cerrada para este turno.",
@@ -319,50 +281,23 @@ export async function toggleMenuStatus(
 }
 
 /**
- * Admin Action: Retrieves historical menus with consolidated rating stats.
+ * Retrieves historical menus with consolidated rating stats.
  */
 export async function getRecentMenusWithStats(
   limit = 14,
-  options?: { supabase?: SupabaseClient<Database> },
 ): Promise<DailyMenuWithStats[]> {
   try {
-    const supabase = options?.supabase ?? (await createClient());
+    const menus = await fetchRecentMenus(limit);
+    const ratingsByMenu = groupRatings(
+      await fetchRatingsForMenus(menus.map((menu) => menu.id)),
+    );
 
-    const { data: menus, error: menusError } = await supabase
-      .from("daily_menus")
-      .select("*")
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(limit);
-
-    if (menusError || !menus) {
-      return [];
-    }
-
-    // Query all ratings for these menus
-    const menuIds = menus.map((m) => m.id);
-    const { data: ratings } = await supabase
-      .from("menu_ratings")
-      .select("menu_id, rating_main, rating_side, rating_beverage")
-      .in("menu_id", menuIds);
-
-    const ratingsByMenu = new Map<
-      string,
-      Array<{ rating_main: number; rating_side: number | null; rating_beverage: number | null }>
-    >();
-
-    for (const r of ratings ?? []) {
-      const list = ratingsByMenu.get(r.menu_id) || [];
-      list.push(r);
-      ratingsByMenu.set(r.menu_id, list);
-    }
-
-    return (menus as DailyMenuRow[]).map((menu) => ({
+    return menus.map((menu) => ({
       ...menu,
       stats: calculateRatingStats(ratingsByMenu.get(menu.id) || []),
     }));
   } catch (err) {
-    console.error("[getRecentMenusWithStats] Error:", err);
+    console.error("[getRecentMenusWithStats] Error:", (err as Error).message);
     return [];
   }
 }

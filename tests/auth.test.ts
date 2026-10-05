@@ -1,74 +1,64 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  signInWithOAuth: vi.fn(),
+  signIn: vi.fn(),
   signOut: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
-    auth: {
-      signInWithOAuth: mocks.signInWithOAuth,
-      signOut: mocks.signOut,
-    },
-  }),
+vi.mock("next-auth/react", () => ({
+  signIn: mocks.signIn,
+  signOut: mocks.signOut,
 }));
 
 import {
   getAuthErrorMessage,
   signInWithInstitutionalGoogle,
   signOut,
+  toSafeRedirectPath,
 } from "@/lib/auth/authActions";
 
 describe("Authentication Actions and Utilities", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.signInWithOAuth.mockResolvedValue({ data: { provider: "google", url: "https://accounts.google.com/o/oauth2/v2/auth" }, error: null });
-    mocks.signOut.mockResolvedValue({ error: null });
+    mocks.signIn.mockResolvedValue(undefined);
+    mocks.signOut.mockResolvedValue(undefined);
   });
 
   describe("signInWithInstitutionalGoogle", () => {
-    it("configures Google provider with hosted domain unsch.edu.pe and select_account prompt", async () => {
-      await signInWithInstitutionalGoogle("/");
-
-      expect(mocks.signInWithOAuth).toHaveBeenCalledWith({
-        provider: "google",
-        options: {
-          redirectTo: expect.stringContaining("/auth/callback"),
-          queryParams: {
-            hd: "unsch.edu.pe",
-            prompt: "select_account",
-          },
-        },
-      });
+    it("starts the NextAuth Google flow and returns no error", async () => {
+      await expect(signInWithInstitutionalGoogle("/")).resolves.toEqual({ error: null });
+      expect(mocks.signIn).toHaveBeenCalledWith("google", { callbackUrl: "/" });
     });
 
-    it("attaches next destination query parameter to callback redirectTo URL", async () => {
-      await signInWithInstitutionalGoogle("/buzon/nuevo");
+    it("carries the destination path as the post-login callbackUrl", async () => {
+      await signInWithInstitutionalGoogle("/admin");
+      expect(mocks.signIn).toHaveBeenCalledWith("google", { callbackUrl: "/admin" });
+    });
 
-      expect(mocks.signInWithOAuth).toHaveBeenCalledWith({
-        provider: "google",
-        options: {
-          redirectTo: expect.stringMatching(/\/auth\/callback\?next=%2Fbuzon%2Fnuevo/),
-          queryParams: {
-            hd: "unsch.edu.pe",
-            prompt: "select_account",
-          },
-        },
-      });
+    it.each(["https://evil.example/phish", "//evil.example", "javascript:alert(1)", ""])(
+      "never forwards the external destination %j",
+      async (destination) => {
+        await signInWithInstitutionalGoogle(destination);
+        expect(mocks.signIn).toHaveBeenCalledWith("google", { callbackUrl: "/" });
+        expect(toSafeRedirectPath(destination)).toBe("/");
+      },
+    );
+
+    it("reports a friendly error when the provider cannot be reached", async () => {
+      mocks.signIn.mockResolvedValue({ error: "OAuthSignin", ok: false, status: 500, url: null });
+      const { error } = await signInWithInstitutionalGoogle("/");
+      expect(error?.message).toContain("Google");
     });
   });
 
   describe("signOut", () => {
-    it("invokes client auth signOut and resolves cleanly", async () => {
+    it("ends the NextAuth session without a full page redirect", async () => {
       await signOut();
-      expect(mocks.signOut).toHaveBeenCalledTimes(1);
+      expect(mocks.signOut).toHaveBeenCalledWith({ redirect: false });
     });
 
-    it("throws when Supabase signOut returns an error", async () => {
-      mocks.signOut.mockResolvedValueOnce({
-        error: new Error("Network disconnection"),
-      });
+    it("propagates sign-out failures so the UI can surface them", async () => {
+      mocks.signOut.mockRejectedValueOnce(new Error("Network disconnection"));
       await expect(signOut()).rejects.toThrow("Network disconnection");
     });
   });
@@ -90,6 +80,11 @@ describe("Authentication Actions and Utilities", () => {
     it("returns user-friendly error for missing authorization session code", () => {
       const result = getAuthErrorMessage("session_missing");
       expect(result.code).toBe("session_missing");
+    });
+
+    it("maps the NextAuth error codes delivered to /login", () => {
+      expect(getAuthErrorMessage("AccessDenied").code).toBe("domain_not_allowed");
+      expect(getAuthErrorMessage("OAuthCallback").code).toBe("oauth_callback_error");
     });
 
     it("returns default fallback for unknown error codes", () => {

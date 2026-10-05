@@ -1,35 +1,44 @@
 import { NextResponse } from "next/server";
 
-import { getVerifiedAdmin } from "@/lib/actions/adminActions";
-import { STORAGE_BUCKET_NAME } from "@/lib/constants/storage";
+import { getVerifiedAdmin } from "@/lib/auth/session";
+import {
+  fetchReferencedPhotoUrls,
+  purgeResolvedMedia,
+} from "@/lib/services/suggestionService";
+import { deleteUpload, listUploads } from "@/lib/storage/localDiskStorage";
+import { storagePathFromPublicPath } from "@/lib/storage/uploadPolicy";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Extracts relative storage path from a full public Supabase URL or raw path.
- * E.g., ".../suggestion-media/lunch/2026-09-22-abc.webp" -> "lunch/2026-09-22-abc.webp"
+ * Files younger than this are never treated as orphans: a student may have
+ * uploaded the photo and still be completing the form.
  */
-function extractStoragePath(urlOrPath: string): string | null {
-  if (!urlOrPath) return null;
-  const bucketMarker = `${STORAGE_BUCKET_NAME}/`;
-  const idx = urlOrPath.indexOf(bucketMarker);
-  if (idx !== -1) {
-    return urlOrPath.substring(idx + bucketMarker.length).split("?")[0];
+const ORPHAN_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
+
+async function deleteFiles(storagePaths: readonly string[]): Promise<string[]> {
+  const deleted: string[] = [];
+
+  for (const storagePath of storagePaths) {
+    try {
+      if (await deleteUpload(storagePath)) {
+        deleted.push(storagePath);
+      }
+    } catch (error) {
+      console.warn("[StorageMaintenance] Local removal warning:", (error as Error).message);
+    }
   }
-  // If it's already a relative path like "lunch/xxx.webp"
-  if (/^(breakfast|lunch|dinner)\//i.test(urlOrPath)) {
-    return urlOrPath.split("?")[0];
-  }
-  return null;
+
+  return deleted;
 }
 
 /**
  * Issue 10.4 — Admin Storage Maintenance Endpoint
  *
- * Executes the storage cleanup routine to maintain the 1 GB Supabase free tier quota:
- * - Identifies resolved suggestions older than 90 days with media attachments.
- * - Disassociates the media URL from the suggestion record (retaining text and responses).
- * - Physically deletes the media objects from the Supabase Storage bucket.
+ * Keeps the on-premise media volume (/app/uploads) bounded:
+ * - Detaches photos from resolved suggestions older than `daysOld` days
+ *   (text and responses are retained) and deletes those files from disk.
+ * - Deletes orphan files: uploads older than 24 hours that no suggestion references.
  */
 export async function POST(request: Request) {
   try {
@@ -44,9 +53,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Load privileged credentials only after authorization, never during build.
-    const { supabaseAdmin } = await import("@/lib/supabase/admin");
-
     let daysOld = 90;
     try {
       const body = await request.json();
@@ -57,67 +63,54 @@ export async function POST(request: Request) {
       // Body is optional; fallback to default 90 days
     }
 
-    // 1. Invoke database RPC to purge database references
-    const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc(
-      "purge_orphaned_or_old_media",
-      { p_days_old: daysOld },
-    );
-
-    if (rpcError) {
-      console.error("[StorageMaintenance] RPC Error:", rpcError);
+    // 1. Detach old media references in the database
+    let purge: Awaited<ReturnType<typeof purgeResolvedMedia>>;
+    try {
+      purge = await purgeResolvedMedia(daysOld);
+    } catch (error) {
+      console.error("[StorageMaintenance] Database error:", (error as Error).message);
       return NextResponse.json(
         {
           success: false,
           error: "Error al ejecutar la rutina de base de datos para depuración de medios.",
-          details: rpcError.message,
         },
         { status: 500 },
       );
     }
 
-    const parsedResult = rpcData as {
-      success?: boolean;
-      purged_count?: number;
-      purged_urls?: string[];
-      cutoff_date?: string;
-      executed_at?: string;
-    };
+    // 2. Physically remove the detached files from the uploads volume
+    const detachedPaths = purge.purgedUrls
+      .map((url) => storagePathFromPublicPath(url))
+      .filter((storagePath): storagePath is string => storagePath !== null);
+    const freedPaths = await deleteFiles(detachedPaths);
 
-    const purgedUrls = parsedResult?.purged_urls ?? [];
-    const pathsToDelete: string[] = [];
-
-    for (const url of purgedUrls) {
-      const path = extractStoragePath(url);
-      if (path) {
-        pathsToDelete.push(path);
-      }
-    }
-
-    // 2. Physically remove files from Supabase Storage bucket if any were returned
-    let storageDeletedCount = 0;
-    if (pathsToDelete.length > 0) {
-      const { data: storageData, error: storageError } = await supabaseAdmin.storage
-        .from(STORAGE_BUCKET_NAME)
-        .remove(pathsToDelete);
-
-      if (storageError) {
-        console.warn("[StorageMaintenance] Storage removal warning:", storageError);
-      } else {
-        storageDeletedCount = storageData?.length ?? pathsToDelete.length;
-      }
-    }
+    // 3. Remove orphan files that no suggestion references anymore
+    const referenced = new Set(
+      (await fetchReferencedPhotoUrls())
+        .map((url) => storagePathFromPublicPath(url))
+        .filter((storagePath): storagePath is string => storagePath !== null),
+    );
+    const orphanCutoff = Date.now() - ORPHAN_GRACE_PERIOD_MS;
+    const orphanPaths = (await listUploads())
+      .filter(
+        (upload) =>
+          !referenced.has(upload.storagePath) && upload.modifiedAt.getTime() <= orphanCutoff,
+      )
+      .map((upload) => upload.storagePath);
+    const orphansDeleted = await deleteFiles(orphanPaths);
 
     return NextResponse.json({
       success: true,
-      message: `Mantenimiento completado con éxito. Se depuraron ${parsedResult?.purged_count ?? 0} registros fotográficos mayores a ${daysOld} días.`,
-      purgedRecordsCount: parsedResult?.purged_count ?? 0,
-      storageDeletedCount,
-      freedPaths: pathsToDelete,
-      cutoffDate: parsedResult?.cutoff_date,
-      executedAt: parsedResult?.executed_at ?? new Date().toISOString(),
+      message: `Mantenimiento completado con éxito. Se depuraron ${purge.purgedCount} registros fotográficos mayores a ${daysOld} días.`,
+      purgedRecordsCount: purge.purgedCount,
+      storageDeletedCount: freedPaths.length + orphansDeleted.length,
+      orphanDeletedCount: orphansDeleted.length,
+      freedPaths: [...freedPaths, ...orphansDeleted],
+      cutoffDate: purge.cutoffDate,
+      executedAt: purge.executedAt,
     });
   } catch (error) {
-    console.error("[StorageMaintenance] Unexpected error:", error);
+    console.error("[StorageMaintenance] Unexpected error:", (error as Error).message);
     return NextResponse.json(
       {
         success: false,

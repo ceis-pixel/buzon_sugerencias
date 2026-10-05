@@ -10,7 +10,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 
 function LoginContent() {
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/";
+  const next = searchParams.get("next") ?? searchParams.get("returnUrl") ?? "/";
 
   return (
     <div className="flex min-h-[65vh] md:min-h-[72vh] w-full flex-col items-center justify-center space-y-6">

@@ -17,8 +17,6 @@ jobs:
     timeout-minutes: 15
 
     env:
-      NEXT_PUBLIC_SUPABASE_URL: "https://mock-ci-project.supabase.co"
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock-ci-anon-key-1234567890"
       NEXT_PUBLIC_APP_URL: "https://buzon-comedor.unsch.edu.pe"
       NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN: "unsch.edu.pe"
       CI: "true"

@@ -1,13 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const mocks = vi.hoisted(() => ({
+  resolveSession: vi.fn(),
+  createAnonymousSuggestion: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/session", () => ({ resolveSession: mocks.resolveSession }));
+vi.mock("@/lib/db", () => ({ query: vi.fn(), withTransaction: vi.fn() }));
+vi.mock("@/lib/services/suggestionService", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/services/suggestionService")>()),
+  createAnonymousSuggestion: mocks.createAnonymousSuggestion,
+}));
+
 import { submitSuggestion } from "@/lib/actions/suggestionActions";
 import {
   mapSuggestionError,
   submitSuggestionSchema,
   type SubmitSuggestionInput,
 } from "@/lib/validations/suggestionSchema";
-import type { Database, SubmittedTicketResult } from "@/types/database.types";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { RateLimitExceededError } from "@/lib/services/suggestionService";
+import type { SubmittedTicketResult } from "@/types/database.types";
 
 describe("Suggestion Schema Validation (submitSuggestionSchema)", () => {
   it("accepts valid suggestion payloads with trimmed message and valid shifts", () => {
@@ -21,13 +33,13 @@ describe("Suggestion Schema Validation (submitSuggestionSchema)", () => {
         shift: "lunch",
         category: "hygiene",
         message: "Las bandejas se encuentran en excelente estado de limpieza.",
-        photoUrl: "https://storage.supabase.co/img1.webp",
+        photoUrl: "/uploads/lunch/2026/10/3f2b8c1e-7a4d-4e9b-9c1a-5d6e7f8a9b0c.webp",
       },
       {
         shift: "dinner",
         category: "portion",
         message: "La porción de la cena fue adecuada y caliente.",
-        photo_url: "https://storage.supabase.co/img2.webp",
+        photo_url: "/uploads/dinner/2026/10/a1b2c3d4-e5f6-4a1b-8c2d-123456789abc.webp",
       },
       {
         shift: "lunch",
@@ -113,7 +125,7 @@ describe("Suggestion Schema Validation (submitSuggestionSchema)", () => {
     }
   });
 
-  it("rejects invalid photo URLs", () => {
+  it("rejects invalid photo URLs and arbitrary strings", () => {
     const result = submitSuggestionSchema.safeParse({
       shift: "lunch",
       category: "menu",
@@ -124,8 +136,41 @@ describe("Suggestion Schema Validation (submitSuggestionSchema)", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0].message).toContain(
-        "La URL de la fotografía adjunta no es válida",
+        "La ruta de la fotografía adjunta no es válida",
       );
+    }
+  });
+
+  it("rejects external HTTP/HTTPS URLs (Security Hardening Hito 3)", () => {
+    const externalInputs = [
+      {
+        shift: "lunch",
+        category: "menu",
+        message: "Mensaje válido con más de diez caracteres.",
+        photo_url: "https://malicious-site.com/image.jpg",
+      },
+      {
+        shift: "dinner",
+        category: "hygiene",
+        message: "Mensaje válido con más de diez caracteres.",
+        photoUrl: "http://malicious-site.com/photo.webp",
+      },
+      {
+        shift: "breakfast",
+        category: "service",
+        message: "Mensaje válido con más de diez caracteres.",
+        photo_url: "https://storage.supabase.co/img.webp",
+      },
+    ];
+
+    for (const input of externalInputs) {
+      const result = submitSuggestionSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toContain(
+          "La ruta de la fotografía adjunta no es válida",
+        );
+      }
     }
   });
 });
@@ -216,24 +261,22 @@ describe("Error Mapping (mapSuggestionError)", () => {
 });
 
 describe("Server Action: submitSuggestion", () => {
-  const mockRpc = vi.fn();
-  const mockClient = {
-    rpc: mockRpc,
-  } as unknown as SupabaseClient<Database>;
+  const STUDENT = "27215508@unsch.edu.pe";
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.resolveSession.mockResolvedValue({
+      ok: true,
+      session: { email: STUDENT, isAdmin: false },
+    });
   });
 
-  it("returns validation error and fieldErrors without calling RPC when input is invalid", async () => {
-    const result = await submitSuggestion(
-      {
-        shift: "lunch",
-        category: "menu",
-        message: "corto",
-      },
-      { supabase: mockClient },
-    );
+  it("returns validation error and fieldErrors without touching the session when input is invalid", async () => {
+    const result = await submitSuggestion({
+      shift: "lunch",
+      category: "menu",
+      message: "corto",
+    });
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -241,10 +284,11 @@ describe("Server Action: submitSuggestion", () => {
       expect(result.error).toBe("El mensaje es demasiado corto (mínimo 10 caracteres).");
       expect(result.fieldErrors?.message).toBeDefined();
     }
-    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mocks.resolveSession).not.toHaveBeenCalled();
+    expect(mocks.createAnonymousSuggestion).not.toHaveBeenCalled();
   });
 
-  it("calls RPC with sanitized message and returns success with ticket data", async () => {
+  it("stores the sanitized message and returns the ticket without any student identifier", async () => {
     const ticketMock: SubmittedTicketResult = {
       id: "550e8400-e29b-41d4-a716-446655440000",
       ticket_code: "UNSCH-7X9K",
@@ -254,23 +298,21 @@ describe("Server Action: submitSuggestion", () => {
       created_at: "2026-09-22T19:00:00.000Z",
     };
 
-    mockRpc.mockResolvedValue({ data: ticketMock, error: null });
+    mocks.createAnonymousSuggestion.mockResolvedValue(ticketMock);
 
-    const result = await submitSuggestion(
-      {
-        shift: "lunch",
-        category: "menu",
-        message: "   Comida muy balanceada y nutritiva hoy.   ",
-        photoUrl: "https://storage.supabase.co/img.webp",
-      },
-      { supabase: mockClient },
-    );
+    const result = await submitSuggestion({
+      shift: "lunch",
+      category: "menu",
+      message: "   Comida muy balanceada y nutritiva hoy.   ",
+      photoUrl: "/uploads/2026/10/3f2b8c1e-7a4d-4e9b-9c1a-5d6e7f8a9b0c.webp",
+    });
 
-    expect(mockRpc).toHaveBeenCalledWith("submit_anonymous_suggestion", {
-      p_shift: "lunch",
-      p_category: "menu",
-      p_message: "Comida muy balanceada y nutritiva hoy.",
-      p_photo_url: "https://storage.supabase.co/img.webp",
+    expect(mocks.createAnonymousSuggestion).toHaveBeenCalledWith({
+      email: STUDENT,
+      shift: "lunch",
+      category: "menu",
+      message: "Comida muy balanceada y nutritiva hoy.",
+      photoUrl: "/uploads/2026/10/3f2b8c1e-7a4d-4e9b-9c1a-5d6e7f8a9b0c.webp",
     });
 
     expect(result).toEqual({
@@ -278,73 +320,80 @@ describe("Server Action: submitSuggestion", () => {
       data: ticketMock,
       error: null,
     });
+    expect(JSON.stringify(result)).not.toContain(STUDENT);
   });
 
   it("converts empty string photoUrl to null for database cleanliness", async () => {
-    mockRpc.mockResolvedValue({ data: { id: "1" }, error: null });
+    mocks.createAnonymousSuggestion.mockResolvedValue({ id: "1" });
 
-    await submitSuggestion(
-      {
-        shift: "breakfast",
-        category: "service",
-        message: "Desayuno puntual a las 7:00 am.",
-        photoUrl: "",
-      },
-      { supabase: mockClient },
-    );
-
-    expect(mockRpc).toHaveBeenCalledWith("submit_anonymous_suggestion", {
-      p_shift: "breakfast",
-      p_category: "service",
-      p_message: "Desayuno puntual a las 7:00 am.",
-      p_photo_url: null,
+    await submitSuggestion({
+      shift: "breakfast",
+      category: "service",
+      message: "Desayuno puntual a las 7:00 am.",
+      photoUrl: "",
     });
+
+    expect(mocks.createAnonymousSuggestion).toHaveBeenCalledWith(
+      expect.objectContaining({ shift: "breakfast", photoUrl: null }),
+    );
   });
 
-  it("handles RPC errors gracefully and returns localized error message", async () => {
-    mockRpc.mockResolvedValue({
-      data: null,
-      error: { message: "Sesión no válida o expirada. Debes iniciar sesión institucional." },
-    });
-
-    const result = await submitSuggestion(
-      {
-        shift: "dinner",
-        category: "infrastructure",
-        message: "Revisar la iluminación de la salida del comedor.",
-      },
-      { supabase: mockClient },
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.data).toBeNull();
-    expect(result.error).toBe(
+  it.each([
+    [
+      "unauthenticated",
       "Tu sesión no es válida o ha expirado. Por favor, inicia sesión con tu correo institucional @unsch.edu.pe.",
-    );
-  });
+    ],
+    [
+      "forbidden_domain",
+      "Acceso denegado: solo cuentas institucionales @unsch.edu.pe pueden enviar sugerencias.",
+    ],
+    [
+      "auth_unavailable",
+      "El servicio de autenticación no está disponible temporalmente. Intenta nuevamente en unos minutos.",
+    ],
+  ] as const)("rejects the submission when the session is %s", async (reason, message) => {
+    mocks.resolveSession.mockResolvedValue({ ok: false, reason });
 
-  it("handles rate limit RPC errors and returns didactic Peruvian Spanish explanation", async () => {
-    mockRpc.mockResolvedValue({
-      data: null,
-      error: {
-        message:
-          "Has alcanzado el límite de 2 reportes para este turno (lunch). Podrás enviar otra observación en el siguiente turno.",
-      },
+    const result = await submitSuggestion({
+      shift: "dinner",
+      category: "infrastructure",
+      message: "Revisar la iluminación de la salida del comedor.",
     });
 
-    const result = await submitSuggestion(
-      {
-        shift: "lunch",
-        category: "menu",
-        message: "Tercer intento en el mismo turno de almuerzo.",
-      },
-      { supabase: mockClient },
-    );
+    expect(result).toEqual({ success: false, data: null, error: message });
+    expect(mocks.createAnonymousSuggestion).not.toHaveBeenCalled();
+  });
+
+  it("explains the exhausted shift quota (429) in didactic Peruvian Spanish", async () => {
+    mocks.createAnonymousSuggestion.mockRejectedValue(new RateLimitExceededError("lunch"));
+
+    const result = await submitSuggestion({
+      shift: "lunch",
+      category: "menu",
+      message: "Tercer intento en el mismo turno de almuerzo.",
+    });
 
     expect(result.success).toBe(false);
     expect(result.data).toBeNull();
     expect(result.error).toBe(
       "Has alcanzado el límite de 2 reportes para el turno de almuerzo. Podrás enviar otra observación en el siguiente turno del comedor universitario para cuidar la estabilidad del buzón.",
+    );
+  });
+
+  it("hides database failures behind a generic message", async () => {
+    mocks.createAnonymousSuggestion.mockRejectedValue(
+      new Error("connect ECONNREFUSED postgresql://unsch_admin:clave@db:5432"),
+    );
+
+    const result = await submitSuggestion({
+      shift: "lunch",
+      category: "menu",
+      message: "Mensaje válido enviado con la base de datos caída.",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe(
+      "Ocurrió un problema al enviar tu sugerencia. Por favor, intenta de nuevo en unos momentos.",
     );
   });
 });

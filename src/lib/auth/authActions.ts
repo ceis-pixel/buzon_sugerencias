@@ -1,41 +1,40 @@
-import { createClient } from "@/lib/supabase/client";
+import { signIn, signOut as nextAuthSignOut } from "next-auth/react";
+
 import type { AuthErrorCode, AuthErrorDetails } from "@/types/auth.types";
 
-/**
- * Initiates the Google OAuth sign-in flow restricted to institutional @unsch.edu.pe accounts.
- *
- * @param redirectTo - Path to redirect to after successful authentication (defaults to "/")
- */
-export async function signInWithInstitutionalGoogle(redirectTo: string = "/") {
-  const supabase = createClient();
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const callbackUrl = new URL("/auth/callback", origin || "http://localhost:3000");
-
-  if (redirectTo && redirectTo !== "/") {
-    callbackUrl.searchParams.set("next", redirectTo);
-  }
-
-  return supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: callbackUrl.toString(),
-      queryParams: {
-        hd: "unsch.edu.pe",
-        prompt: "select_account",
-      },
-    },
-  });
+/** Only same-site relative paths are accepted as post-login destinations. */
+export function toSafeRedirectPath(redirectTo: string | null | undefined): string {
+  return redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
+    ? redirectTo
+    : "/";
 }
 
 /**
- * Signs out the current user, clearing session cookies and local storage state.
+ * Initiates the Google Workspace SSO flow restricted to institutional @unsch.edu.pe
+ * accounts. The domain is enforced on the server by the NextAuth `signIn` callback.
+ *
+ * @param redirectTo - Path to redirect to after successful authentication (defaults to "/")
+ */
+export async function signInWithInstitutionalGoogle(
+  redirectTo: string = "/",
+): Promise<{ error: { message: string } | null }> {
+  const result = await signIn("google", { callbackUrl: toSafeRedirectPath(redirectTo) });
+
+  // On success the browser navigates to Google and this code never resumes.
+  if (result?.error) {
+    return {
+      error: { message: "No se pudo iniciar el acceso con Google. Por favor, vuelve a intentarlo." },
+    };
+  }
+
+  return { error: null };
+}
+
+/**
+ * Signs out the current user, clearing the session cookie.
  */
 export async function signOut() {
-  const supabase = createClient();
-  const { error } = await supabase.auth.signOut();
-  if (error) {
-    throw error;
-  }
+  await nextAuthSignOut({ redirect: false });
 }
 
 /**
@@ -46,6 +45,7 @@ export function getAuthErrorMessage(
 ): AuthErrorDetails {
   switch (code) {
     case "domain_not_allowed":
+    case "AccessDenied":
       return {
         code: "domain_not_allowed",
         title: "Acceso exclusivo institucional",
@@ -53,6 +53,9 @@ export function getAuthErrorMessage(
           "Solo se permite ingresar con correos institucionales @unsch.edu.pe. Por favor, selecciona tu cuenta universitaria de la UNSCH.",
       };
     case "oauth_callback_error":
+    case "OAuthSignin":
+    case "OAuthCallback":
+    case "Callback":
       return {
         code: "oauth_callback_error",
         title: "Error de autenticación",

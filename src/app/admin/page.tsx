@@ -3,11 +3,15 @@ import type { DashboardMetrics } from "@/components/admin/DashboardMetricsCards"
 import type { SuggestionWithResponse } from "@/components/admin/SuggestionDetailModal";
 import type { PaginationInfo } from "@/components/admin/SuggestionsTable";
 import type { FilterState } from "@/components/admin/SuggestionsFilterBar";
-import { createClient } from "@/lib/supabase/server";
+import { getVerifiedAdmin } from "@/lib/auth/session";
+import {
+  fetchAdminSuggestions,
+  fetchDashboardMetrics,
+  fetchResponses,
+} from "@/lib/services/suggestionService";
 import type {
   ShiftType,
   SuggestionCategory,
-  SuggestionRow,
   TicketResponseRow,
   TicketStatus,
 } from "@/types/database.types";
@@ -44,101 +48,21 @@ export default async function AdminDashboardPage(props: AdminDashboardPageProps)
   const status = (searchParams.status || "all") as TicketStatus | "all";
   const searchQuery = (searchParams.search || "").trim();
 
-  const supabase = await createClient();
-
-  // 1. Compute global operational KPI metrics across all suggestions in parallel
-  // eslint-disable-next-line react-hooks/purity
-  const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-  const [totalRes, pendingRes, inReviewRes, resolvedRes, weeklyRes] =
-    await Promise.all([
-      supabase.from("suggestions").select("*", { count: "exact", head: true }),
-      supabase
-        .from("suggestions")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending"),
-      supabase
-        .from("suggestions")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "in_review"),
-      supabase
-        .from("suggestions")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "resolved"),
-      supabase
-        .from("suggestions")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", sevenDaysAgoIso),
-    ]);
-
-  const total = totalRes.count ?? 0;
-  const pending = pendingRes.count ?? 0;
-  const inReview = inReviewRes.count ?? 0;
-  const resolved = resolvedRes.count ?? 0;
-  const weeklyIncrement = weeklyRes.count ?? 0;
-  const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
-
-  const metrics: DashboardMetrics = {
-    total,
-    pending,
-    inReview,
-    resolved,
-    weeklyIncrement,
-    resolutionRate,
-  };
-
-  // 2. Build filtered and paginated query
-  let query = supabase
-    .from("suggestions")
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false });
-
-  if (shift !== "all") {
-    query = query.eq("shift", shift);
-  }
-  if (category !== "all") {
-    query = query.eq("category", category);
-  }
-  if (status !== "all") {
-    query = query.eq("status", status);
-  }
-  if (searchQuery !== "") {
-    if (searchQuery.toUpperCase().startsWith("UNSCH-")) {
-      query = query.ilike("ticket_code", `%${searchQuery}%`);
-    } else {
-      query = query.ilike("message", `%${searchQuery}%`);
-    }
+  // The layout renders the access screens; the page refuses to load data on its own.
+  if (!(await getVerifiedAdmin())) {
+    return null;
   }
 
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+  // 1. Global operational KPI metrics and the filtered, paginated slice
+  const [metrics, { suggestions: rawSuggestions, totalCount }] = await Promise.all([
+    fetchDashboardMetrics() satisfies Promise<DashboardMetrics>,
+    fetchAdminSuggestions({ page, pageSize, shift, category, status, search: searchQuery }),
+  ]);
 
-  const { data: suggestionsData, count: filteredCount, error: suggestionsError } =
-    await query.range(from, to);
-
-  if (suggestionsError) {
-    console.error("[AdminDashboardPage] Suggestions fetch error:", suggestionsError);
-  }
-
-  const rawSuggestions = (suggestionsData ?? []) as SuggestionRow[];
-
-  // 3. Query responses only for suggestions present in the active page
-  const suggestionIds = rawSuggestions.map((s) => s.id);
-  let rawResponses: TicketResponseRow[] = [];
-
-  if (suggestionIds.length > 0) {
-    const { data: responsesData, error: responsesError } = await supabase
-      .from("ticket_responses")
-      .select("*")
-      .in("suggestion_id", suggestionIds)
-      .order("created_at", { ascending: true });
-
-    if (responsesError) {
-      console.error("[AdminDashboardPage] Responses fetch error:", responsesError);
-    } else {
-      rawResponses = (responsesData ?? []) as TicketResponseRow[];
-    }
-  }
+  // 2. Responses only for suggestions present in the active page
+  const rawResponses: TicketResponseRow[] = await fetchResponses(
+    rawSuggestions.map((s) => s.id),
+  );
 
   // Map responses by suggestion_id
   const responsesBySuggestion = new Map<string, TicketResponseRow[]>();
@@ -161,7 +85,7 @@ export default async function AdminDashboardPage(props: AdminDashboardPageProps)
     };
   });
 
-  const totalFiltered = filteredCount ?? rawSuggestions.length;
+  const totalFiltered = totalCount;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
 
   const pagination: PaginationInfo = {

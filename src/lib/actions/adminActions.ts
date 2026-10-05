@@ -1,14 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
-import { createClient } from "@/lib/supabase/server";
+import { getVerifiedAdmin } from "@/lib/auth/session";
+import {
+  submitOfficialResponse,
+  updateSuggestionStatusById,
+} from "@/lib/services/suggestionService";
 import {
   officialResponseSchema,
   type OfficialResponseInput,
 } from "@/lib/validations/responseSchema";
 import type {
-  AdminRow,
   SuggestionRow,
   TicketResponseRow,
   TicketStatus,
@@ -20,39 +24,10 @@ export interface AdminActionResponse<T> {
   error: string | null;
 }
 
-/**
- * Validates that the current session belongs to an active administrator.
- */
-export async function getVerifiedAdmin(): Promise<{
-  userEmail: string;
-  adminRecord: AdminRow;
-} | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+const UNAUTHORIZED_MESSAGE =
+  "Acceso no autorizado. Se requieren credenciales de moderador activo.";
 
-  if (authError || !user?.email) {
-    return null;
-  }
-
-  const { data: adminRecord, error: adminError } = await supabase
-    .from("admins")
-    .select("*")
-    .eq("email", user.email.toLowerCase())
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (adminError || !adminRecord) {
-    return null;
-  }
-
-  return {
-    userEmail: user.email.toLowerCase(),
-    adminRecord: adminRecord as AdminRow,
-  };
-}
+const suggestionIdSchema = z.uuid();
 
 /**
  * Server Action: Updates a suggestion status (pending | in_review | resolved).
@@ -65,11 +40,7 @@ export async function updateSuggestionStatus(
   try {
     const admin = await getVerifiedAdmin();
     if (!admin) {
-      return {
-        success: false,
-        data: null,
-        error: "Acceso no autorizado. Se requieren credenciales de moderador activo.",
-      };
+      return { success: false, data: null, error: UNAUTHORIZED_MESSAGE };
     }
 
     if (!["pending", "in_review", "resolved"].includes(newStatus)) {
@@ -80,20 +51,11 @@ export async function updateSuggestionStatus(
       };
     }
 
-    const supabase = await createClient();
+    const updated = suggestionIdSchema.safeParse(suggestionId).success
+      ? await updateSuggestionStatusById(suggestionId, newStatus)
+      : null;
 
-    const { data, error } = await supabase
-      .from("suggestions")
-      .update({
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", suggestionId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("[updateSuggestionStatus] Error:", error);
+    if (!updated) {
       return {
         success: false,
         data: null,
@@ -104,13 +66,9 @@ export async function updateSuggestionStatus(
     revalidatePath("/admin");
     revalidatePath("/seguimiento");
 
-    return {
-      success: true,
-      data: data as SuggestionRow,
-      error: null,
-    };
+    return { success: true, data: updated, error: null };
   } catch (err) {
-    console.error("[updateSuggestionStatus] Unexpected exception:", err);
+    console.error("[updateSuggestionStatus] Unexpected exception:", (err as Error).message);
     return {
       success: false,
       data: null,
@@ -145,105 +103,32 @@ export async function saveOfficialResponse(
   try {
     const admin = await getVerifiedAdmin();
     if (!admin) {
+      return { success: false, data: null, error: UNAUTHORIZED_MESSAGE };
+    }
+
+    // Response and status change commit together or not at all.
+    const saved = suggestionIdSchema.safeParse(validation.data.suggestionId).success
+      ? await submitOfficialResponse({
+          suggestionId: validation.data.suggestionId,
+          responderEmail: admin.userEmail,
+          responseText: validation.data.responseText,
+        })
+      : null;
+
+    if (!saved) {
       return {
         success: false,
         data: null,
-        error: "Acceso no autorizado. Se requieren credenciales de moderador activo.",
-      };
-    }
-
-    const supabase = await createClient();
-
-    // Check if an existing public response exists for this suggestion
-    const { data: existingResponse } = await supabase
-      .from("ticket_responses")
-      .select("*")
-      .eq("suggestion_id", validation.data.suggestionId)
-      .eq("is_internal", false)
-      .maybeSingle();
-
-    let savedResponse: TicketResponseRow;
-
-    if (existingResponse) {
-      const { data: updatedResp, error: updateError } = await supabase
-        .from("ticket_responses")
-        .update({
-          responder_email: admin.userEmail,
-          response_text: validation.data.responseText,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingResponse.id)
-        .select()
-        .single();
-
-      if (updateError || !updatedResp) {
-        console.error("[saveOfficialResponse] Update error:", updateError);
-        return {
-          success: false,
-          data: null,
-          error: "Error al actualizar la respuesta oficial previa.",
-        };
-      }
-      savedResponse = updatedResp as TicketResponseRow;
-    } else {
-      const { data: insertedResp, error: insertError } = await supabase
-        .from("ticket_responses")
-        .insert({
-          suggestion_id: validation.data.suggestionId,
-          responder_email: admin.userEmail,
-          response_text: validation.data.responseText,
-          is_internal: false,
-        })
-        .select()
-        .single();
-
-      if (insertError || !insertedResp) {
-        console.error("[saveOfficialResponse] Insert error:", insertError);
-        return {
-          success: false,
-          data: null,
-          error: "Error al registrar la nueva respuesta institucional.",
-        };
-      }
-      savedResponse = insertedResp as TicketResponseRow;
-    }
-
-    // Automatically transition ticket to resolved
-    const { data: updatedSuggestion, error: suggestionError } = await supabase
-      .from("suggestions")
-      .update({
-        status: "resolved",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", validation.data.suggestionId)
-      .select()
-      .single();
-
-    if (suggestionError || !updatedSuggestion) {
-      console.error(
-        "[saveOfficialResponse] Suggestion status update error:",
-        suggestionError,
-      );
-      return {
-        success: false,
-        data: null,
-        error: "La respuesta se guardó pero falló la actualización del estado a atendido.",
+        error: "No se encontró la sugerencia a la que intentas responder.",
       };
     }
 
     revalidatePath("/admin");
     revalidatePath("/seguimiento");
 
-    return {
-      success: true,
-      data: {
-        response: savedResponse,
-        suggestion: updatedSuggestion as SuggestionRow,
-      },
-      error: null,
-    };
+    return { success: true, data: saved, error: null };
   } catch (err) {
-    console.error("[saveOfficialResponse] Unexpected exception:", err);
+    console.error("[saveOfficialResponse] Unexpected exception:", (err as Error).message);
     return {
       success: false,
       data: null,

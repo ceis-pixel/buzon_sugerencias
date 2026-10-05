@@ -1,12 +1,30 @@
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const actionMocks = vi.hoisted(() => ({
+  getInstitutionalSession: vi.fn(),
+  createMenuRating: vi.fn(),
+  hasRatedToday: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/session", () => ({
+  getInstitutionalSession: actionMocks.getInstitutionalSession,
+  getVerifiedAdmin: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/lib/services/menuService", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/services/menuService")>()),
+  createMenuRating: actionMocks.createMenuRating,
+  hasRatedToday: actionMocks.hasRatedToday,
+}));
+vi.mock("@/lib/db", () => ({ query: vi.fn(), withTransaction: vi.fn() }));
 
 import {
   checkHasUserRated,
   submitMenuRating,
 } from "@/lib/actions/menuRatingActions";
+import { MenuRatingError } from "@/lib/services/menuService";
 import {
   calculateRatingStats,
   dailyMenuSchema,
@@ -160,55 +178,84 @@ describe("Sprint 11 — Issue 11.4: Real-Time Satisfaction Thermometer Calculati
 // Server Action Mock Tests
 // ============================================================================
 describe("Sprint 11 — Issue 11.3: Server Action Defensive Execution", () => {
-  it("fails early on invalid input without hitting the Supabase client", async () => {
-    const mockRpc = vi.fn();
-    const mockClient = { rpc: mockRpc } as unknown as import("@supabase/supabase-js").SupabaseClient;
+  const validRating = {
+    menuId: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+    shift: "lunch" as const,
+    ratingMain: 5,
+  };
 
-    const res = await submitMenuRating(
-      {
-        menuId: "invalid-id",
-        shift: "lunch",
-        ratingMain: 5,
-      },
-      { supabase: mockClient },
-    );
+  beforeEach(() => {
+    actionMocks.getInstitutionalSession.mockResolvedValue({
+      email: "estudiante.test@unsch.edu.pe",
+      isAdmin: false,
+    });
+  });
+
+  it("fails early on invalid input without reading the session or the database", async () => {
+    const res = await submitMenuRating({ ...validRating, menuId: "invalid-id" });
 
     expect(res.success).toBe(false);
-    expect(mockRpc).not.toHaveBeenCalled();
+    expect(actionMocks.getInstitutionalSession).not.toHaveBeenCalled();
+    expect(actionMocks.createMenuRating).not.toHaveBeenCalled();
+  });
+
+  it("requires an institutional session to rate", async () => {
+    actionMocks.getInstitutionalSession.mockResolvedValue(null);
+
+    const res = await submitMenuRating(validRating);
+
+    expect(res.success).toBe(false);
+    expect(res.message).toContain("@unsch.edu.pe");
+    expect(actionMocks.createMenuRating).not.toHaveBeenCalled();
+  });
+
+  it("registers the vote using the session e-mail only to derive the quota hash", async () => {
+    actionMocks.createMenuRating.mockResolvedValue({ success: true, id: "rating-1" });
+
+    const res = await submitMenuRating({ ...validRating, ratingSide: 4 });
+
+    expect(res.success).toBe(true);
+    expect(actionMocks.createMenuRating).toHaveBeenCalledWith({
+      email: "estudiante.test@unsch.edu.pe",
+      menuId: validRating.menuId,
+      shift: "lunch",
+      ratingMain: 5,
+      ratingSide: 4,
+      ratingBeverage: null,
+    });
+    // The action never echoes the student's identity back to the browser.
+    expect(JSON.stringify(res)).not.toContain("estudiante.test");
   });
 
   it("handles duplicate rating error by returning hasAlreadyRated: true", async () => {
-    const mockClient = {
-      rpc: vi.fn().mockResolvedValue({
-        data: null,
-        error: { message: "Ya registraste tu opinión para el turno de hoy. ¡Gracias por participar!" },
-      }),
-    } as unknown as import("@supabase/supabase-js").SupabaseClient;
-
-    const res = await submitMenuRating(
-      {
-        menuId: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-        shift: "lunch",
-        ratingMain: 5,
-      },
-      { supabase: mockClient },
+    actionMocks.createMenuRating.mockRejectedValue(
+      new MenuRatingError("Ya registraste tu opinión para el turno de hoy. ¡Gracias por participar!", true),
     );
+
+    const res = await submitMenuRating(validRating);
 
     expect(res.success).toBe(false);
     expect(res.hasAlreadyRated).toBe(true);
     expect(res.message).toContain("Ya registraste tu opinión");
   });
 
-  it("checks whether student has rated using has_user_rated_today RPC", async () => {
-    const mockClient = {
-      rpc: vi.fn().mockResolvedValue({
-        data: true,
-        error: null,
-      }),
-    } as unknown as import("@supabase/supabase-js").SupabaseClient;
+  it("hides unexpected database failures behind a generic message", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    actionMocks.createMenuRating.mockRejectedValue(new Error("relation menu_ratings does not exist"));
 
-    const hasRated = await checkHasUserRated("lunch", { supabase: mockClient });
-    expect(hasRated).toBe(true);
+    const res = await submitMenuRating(validRating);
+
+    expect(res).toMatchObject({ success: false, hasAlreadyRated: false });
+    expect(res.message).not.toContain("relation");
+  });
+
+  it("checks whether the student has rated today, and answers false for visitors", async () => {
+    actionMocks.hasRatedToday.mockResolvedValue(true);
+    await expect(checkHasUserRated("lunch")).resolves.toBe(true);
+    expect(actionMocks.hasRatedToday).toHaveBeenCalledWith("estudiante.test@unsch.edu.pe", "lunch");
+
+    actionMocks.getInstitutionalSession.mockResolvedValue(null);
+    await expect(checkHasUserRated("lunch")).resolves.toBe(false);
   });
 });
 

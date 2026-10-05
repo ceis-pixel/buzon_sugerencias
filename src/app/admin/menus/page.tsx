@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { AdminMenusView } from "@/components/admin/menus/AdminMenusView";
 import { getRecentMenusWithStats } from "@/lib/actions/menuRatingActions";
+import { getVerifiedAdmin } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
   title: "Gestión de Menús Diarios y Calificaciones • Comedor UNSCH",
@@ -20,6 +21,10 @@ export const dynamic = "force-dynamic";
  * - One-click toggle to open/close live rating submissions for finished shifts.
  */
 export default async function AdminMenusPage() {
+  if (!(await getVerifiedAdmin())) {
+    return null;
+  }
+
   const menus = await getRecentMenusWithStats(20);
 
   return <AdminMenusView initialMenus={menus} />;

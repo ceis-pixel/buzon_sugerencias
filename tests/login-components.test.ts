@@ -5,13 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import { PrivacyNotice } from "@/components/auth/PrivacyNotice";
 import { LoginCard } from "@/components/auth/LoginCard";
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
-    auth: {
-      signInWithOAuth: vi.fn(),
-      signOut: vi.fn(),
-    },
-  }),
+vi.mock("next-auth/react", () => ({
+  signIn: vi.fn(),
+  signOut: vi.fn(),
 }));
 
 describe("Login and Authentication UI Components", () => {

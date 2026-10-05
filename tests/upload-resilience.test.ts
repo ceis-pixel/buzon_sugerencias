@@ -1,4 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -6,7 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 import { ImageAttachmentField } from "@/components/media/ImageAttachmentField";
 import { UploadProgressCard } from "@/components/media/UploadProgressCard";
 import { uploadSuggestionImage } from "@/lib/services/storageService";
-import type { Database } from "@/types/database.types";
 
 describe("uploadSuggestionImage resilience, abort, and timeout", () => {
   const sampleFile = new File([new Uint8Array(100 * 1024)], "foto.webp", {
@@ -25,23 +23,24 @@ describe("uploadSuggestionImage resilience, abort, and timeout", () => {
     });
   });
 
+  /** Emulates a request that stays pending until its AbortSignal fires. */
+  function pendingFetch() {
+    return vi.fn().mockImplementation(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        })
+    );
+  }
+
   it("aborts mid-flight when signal is triggered while upload is pending", async () => {
     const controller = new AbortController();
-
-    // Mock an upload that never completes until aborted
-    const mockUpload = vi.fn().mockImplementation(() => new Promise(() => {}));
-    const mockClient = {
-      storage: {
-        from: vi.fn().mockReturnValue({
-          upload: mockUpload,
-          getPublicUrl: vi.fn(),
-        }),
-      },
-    } as unknown as SupabaseClient<Database>;
+    vi.stubGlobal("fetch", pendingFetch());
 
     const uploadPromise = uploadSuggestionImage(sampleFile, {
       signal: controller.signal,
-      client: mockClient,
     });
 
     // Abort after a tick
@@ -55,19 +54,10 @@ describe("uploadSuggestionImage resilience, abort, and timeout", () => {
   });
 
   it("triggers defensive timeout if network does not respond within timeoutMs", async () => {
-    const mockUpload = vi.fn().mockImplementation(() => new Promise(() => {}));
-    const mockClient = {
-      storage: {
-        from: vi.fn().mockReturnValue({
-          upload: mockUpload,
-          getPublicUrl: vi.fn(),
-        }),
-      },
-    } as unknown as SupabaseClient<Database>;
+    vi.stubGlobal("fetch", pendingFetch());
 
     await expect(
       uploadSuggestionImage(sampleFile, {
-        client: mockClient,
         timeoutMs: 50, // Short timeout for test
       })
     ).rejects.toMatchObject({
@@ -79,25 +69,21 @@ describe("uploadSuggestionImage resilience, abort, and timeout", () => {
 
   it("emits progress updates via onProgress callback", async () => {
     const onProgress = vi.fn();
-    const mockUpload = vi.fn().mockResolvedValue({ data: { path: "path" }, error: null });
-    const mockGetPublicUrl = vi.fn().mockReturnValue({ data: { publicUrl: "http://public.url" } });
-    const mockClient = {
-      storage: {
-        from: vi.fn().mockReturnValue({
-          upload: mockUpload,
-          getPublicUrl: mockGetPublicUrl,
-        }),
-      },
-    } as unknown as SupabaseClient<Database>;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json(
+          { path: "/uploads/2026/10/uuid.webp", storagePath: "2026/10/uuid.webp", size: 100 * 1024 },
+          { status: 201 }
+        )
+      )
+    );
 
-    const result = await uploadSuggestionImage(sampleFile, {
-      client: mockClient,
-      onProgress,
-    });
+    const result = await uploadSuggestionImage(sampleFile, { onProgress });
 
     expect(onProgress).toHaveBeenCalled();
     expect(onProgress).toHaveBeenCalledWith(100);
-    expect(result.publicUrl).toBe("http://public.url");
+    expect(result.publicUrl).toBe("/uploads/2026/10/uuid.webp");
   });
 });
 

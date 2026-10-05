@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
+import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import { OfflineBanner } from "@/components/common/OfflineBanner";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
@@ -44,22 +45,24 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="es" className={manrope.variable}>
       <body className="flex min-h-screen flex-col bg-slate-50 font-sans text-neutral-gray antialiased">
-        <OfflineBanner />
-        <a
-          href="#main-content"
-          className="sr-only rounded-xl bg-primary px-4 py-3 text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50"
-        >
-          Saltar al contenido
-        </a>
-        <Header />
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className="w-full flex-1"
-        >
-          {children}
-        </main>
-        <Footer />
+        <AuthSessionProvider>
+          <OfflineBanner />
+          <a
+            href="#main-content"
+            className="sr-only rounded-xl bg-primary px-4 py-3 text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50"
+          >
+            Saltar al contenido
+          </a>
+          <Header />
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="w-full flex-1"
+          >
+            {children}
+          </main>
+          <Footer />
+        </AuthSessionProvider>
       </body>
     </html>
   );

@@ -12,7 +12,7 @@ export interface UseLogoutReturn {
   logoutError: string | null;
   /**
    * Executes the full secure logout sequence:
-   * 1. Calls supabase.auth.signOut() via the shared authActions helper.
+   * 1. Ends the NextAuth session via the shared authActions helper.
    * 2. Clears any auth-related keys from localStorage / sessionStorage without
    *    removing ticket-lookup history stored by the student.
    * 3. Replaces the current history entry with /login so the browser back button
@@ -21,9 +21,10 @@ export interface UseLogoutReturn {
   handleLogout: () => Promise<void>;
 }
 
-const AUTH_STORAGE_PREFIXES = ["sb-", "supabase.auth"];
+// Includes keys left behind by the previous auth provider on returning devices.
+const AUTH_STORAGE_PREFIXES = ["sb-", "supabase.auth", "nextauth."];
 
-/** Purges Supabase auth credentials from browser storage while keeping anonymous ticket data. */
+/** Purges auth leftovers from browser storage while keeping anonymous ticket data. */
 function purgeAuthStorage() {
   for (const storage of [window.localStorage, window.sessionStorage]) {
     const keysToRemove: string[] = [];

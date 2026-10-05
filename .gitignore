@@ -37,6 +37,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# Fotografías locales (desarrollo en el host)
+/uploads/
+
 # vercel
 .vercel
 

@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { UnauthorizedAccessState } from "@/components/admin/UnauthorizedAccessState";
-import { createClient } from "@/lib/supabase/server";
-import type { AdminRow } from "@/types/database.types";
+import { getInstitutionalSession } from "@/lib/auth/session";
+import { findActiveAdmin } from "@/lib/services/adminService";
 
 export const metadata: Metadata = {
   title: "Panel de Gestión y Moderación FUSCH • Comedor UNSCH",
@@ -16,43 +16,37 @@ export const metadata: Metadata = {
   },
 };
 
+// Session-bound segment: never prerender at build time (the on-premise image is
+// compiled without credentials or auth provider configuration).
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const session = await getInstitutionalSession();
 
   // If no active session exists, redirect to login with returnUrl
-  if (authError || !user) {
+  if (!session) {
     redirect("/login?returnUrl=/admin");
   }
 
   // Check if authenticated email exists in the admins whitelist and is active
-  const { data: adminRecord, error: adminError } = await supabase
-    .from("admins")
-    .select("*")
-    .eq("email", user.email?.toLowerCase() ?? "")
-    .eq("is_active", true)
-    .maybeSingle();
+  const adminRecord = await findActiveAdmin(session.email);
 
   // If user is authenticated but not an active administrator, display didactic 403 screen
-  if (adminError || !adminRecord) {
+  if (!adminRecord) {
     return (
       <main className="min-h-screen bg-slate-50 flex flex-col justify-center">
-        <UnauthorizedAccessState userEmail={user.email ?? "Desconocido"} />
+        <UnauthorizedAccessState userEmail={session.email} />
       </main>
     );
   }
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 font-sans antialiased text-gray-900">
-      <AdminHeader admin={adminRecord as AdminRow} />
+      <AdminHeader admin={adminRecord} />
       <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {children}
       </div>

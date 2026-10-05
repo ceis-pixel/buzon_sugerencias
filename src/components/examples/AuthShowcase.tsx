@@ -16,7 +16,7 @@ export function AuthShowcase() {
       setStatus("Iniciando flujo OAuth institucional...");
       const { error } = await signInWithInstitutionalGoogle("/");
       if (error) {
-        setStatus(`Error al conectar con Supabase: ${error.message}`);
+        setStatus(`Error al iniciar el acceso institucional: ${error.message}`);
       }
     } catch (err) {
       setStatus(`Excepción: ${err instanceof Error ? err.message : "Error desconocido"}`);

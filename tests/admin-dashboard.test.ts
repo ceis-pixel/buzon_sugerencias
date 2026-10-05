@@ -85,7 +85,7 @@ describe("Sprint 8 — Report Export & Date Utilities (Issue 8.6)", () => {
         shift: "lunch",
         category: "menu",
         message: "El guiso del almuerzo tenía exceso de sal.",
-        photo_url: "https://storage.supabase.co/img.webp",
+        photo_url: "/uploads/lunch/2026/09/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa.webp",
         status: "resolved",
         created_at: "2026-09-28T12:00:00Z",
         updated_at: "2026-09-28T14:00:00Z",
@@ -122,7 +122,7 @@ describe("Sprint 8 — Report Export & Date Utilities (Issue 8.6)", () => {
     expect(row1["Categoría"]).toBe("Menú / Sabor");
     expect(row1["Observación del Estudiante"]).toBe("El guiso del almuerzo tenía exceso de sal.");
     expect(row1["Tiene Evidencia Fotográfica (Sí/No)"]).toBe("Sí");
-    expect(row1["URL Foto"]).toBe("https://storage.supabase.co/img.webp");
+    expect(row1["URL Foto"]).toBe("/uploads/lunch/2026/09/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa.webp");
     expect(row1["Estado"]).toBe("Atendido");
     expect(row1["Respuesta Oficial"]).toBe("Se notificó al jefe de cocina y se calibró la receta del menú.");
 

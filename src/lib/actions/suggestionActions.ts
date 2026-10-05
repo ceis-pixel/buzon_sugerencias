@@ -1,15 +1,14 @@
 "use server";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-
-import { createClient } from "@/lib/supabase/server";
+import { resolveSession } from "@/lib/auth/session";
 import { sendCriticalAlertWebhook } from "@/lib/services/alertWebhook";
+import { createAnonymousSuggestion } from "@/lib/services/suggestionService";
 import {
   mapSuggestionError,
   submitSuggestionSchema,
   type SubmitSuggestionInput,
 } from "@/lib/validations/suggestionSchema";
-import type { Database, SubmittedTicketResult } from "@/types/database.types";
+import type { SubmittedTicketResult } from "@/types/database.types";
 
 export type SubmitSuggestionResult =
   | {
@@ -24,9 +23,17 @@ export type SubmitSuggestionResult =
       fieldErrors?: Partial<Record<keyof SubmitSuggestionInput, string[]>>;
     };
 
+const SESSION_ERRORS = {
+  unauthenticated:
+    "Tu sesión no es válida o ha expirado. Por favor, inicia sesión con tu correo institucional @unsch.edu.pe.",
+  forbidden_domain:
+    "Acceso denegado: solo cuentas institucionales @unsch.edu.pe pueden enviar sugerencias.",
+  auth_unavailable:
+    "El servicio de autenticación no está disponible temporalmente. Intenta nuevamente en unos minutos.",
+} as const;
+
 export async function submitSuggestion(
   input: SubmitSuggestionInput,
-  options?: { supabase?: SupabaseClient<Database> },
 ): Promise<SubmitSuggestionResult> {
   const validation = submitSuggestionSchema.safeParse(input);
 
@@ -51,26 +58,22 @@ export async function submitSuggestion(
   }
 
   try {
-    const supabase = options?.supabase ?? (await createClient());
+    // The e-mail stays in this scope: it only feeds the ephemeral rate hash.
+    const lookup = await resolveSession();
+    if (!lookup.ok) {
+      return { success: false, data: null, error: SESSION_ERRORS[lookup.reason] };
+    }
+
     const photoUrl =
       validation.data.photoUrl || validation.data.photo_url || null;
 
-    const { data, error } = await supabase.rpc("submit_anonymous_suggestion", {
-      p_shift: validation.data.shift,
-      p_category: validation.data.category,
-      p_message: validation.data.message,
-      p_photo_url: photoUrl,
+    const submitted = await createAnonymousSuggestion({
+      email: lookup.session.email,
+      shift: validation.data.shift,
+      category: validation.data.category,
+      message: validation.data.message,
+      photoUrl,
     });
-
-    if (error) {
-      return {
-        success: false,
-        data: null,
-        error: mapSuggestionError(error),
-      };
-    }
-
-    const submitted = data as unknown as SubmittedTicketResult;
 
     // Issue 10.2: Trigger automated webhook alert for critical cases (fault-tolerant & non-blocking)
     try {

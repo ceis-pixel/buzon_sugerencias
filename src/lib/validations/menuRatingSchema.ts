@@ -74,7 +74,7 @@ export const dailyMenuSchema = z.object({
 export type DailyMenuInput = z.infer<typeof dailyMenuSchema>;
 
 /**
- * Maps PostgreSQL and Supabase errors to user-friendly messages in Peruvian Spanish.
+ * Maps domain and PostgreSQL errors to user-friendly messages in Peruvian Spanish.
  */
 export function mapMenuRatingError(error: unknown): string {
   if (!error) return "Ocurrió un error inesperado al procesar la solicitud.";
