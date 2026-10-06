@@ -1,3 +1,5 @@
+> **Documento histórico (archivado).** Describe la etapa previa del proyecto sobre servicios en la nube (Supabase, Vercel, Firebase), hoy descontinuados. No refleja la arquitectura on-premise vigente; consulta el [expediente técnico para la OTI](../oti/).
+
 # Cierre del Sprint 1
 
 Fecha de verificación: 9 de septiembre de 2026.

@@ -1,3 +1,5 @@
+> **Documento histórico (archivado).** Describe la etapa previa del proyecto sobre servicios en la nube (Supabase, Vercel, Firebase), hoy descontinuados. No refleja la arquitectura on-premise vigente; consulta el [expediente técnico para la OTI](../oti/).
+
 # Guía de Configuración: Google OAuth con Restricción Institucional (@unsch.edu.pe)
 
 Esta guía describe los pasos necesarios para habilitar y configurar la autenticación OAuth 2.0 con Google en el sistema **Buzón de Sugerencias - Comedor UNSCH**, garantizando el acceso exclusivo a cuentas estudiantiles e institucionales de la Universidad Nacional de San Cristóbal de Huamanga.

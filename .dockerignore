@@ -33,7 +33,4 @@ supabase
 tests
 docs
 *.md
-vercel.json
-.firebase
-.apphosting
 npm-debug.log*

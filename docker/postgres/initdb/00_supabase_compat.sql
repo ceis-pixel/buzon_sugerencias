@@ -1,11 +1,13 @@
 -- Compatibility layer for running the project migrations on plain PostgreSQL 16.
 --
--- The migrations in supabase/migrations were written for Supabase and reference
--- its roles (anon, authenticated, service_role) and the auth.* helpers. This file
--- provides local equivalents so the same SQL applies unchanged on-premise.
+-- The historical migrations in supabase/migrations reference a set of roles
+-- (anon, authenticated, service_role) and auth.* helper functions from the
+-- project's earlier hosting. This file provides local equivalents so the same
+-- SQL applies unchanged on-premise.
 --
--- TRANSITIONAL (Hito 1): Hito 2 replaces these stand-ins when authentication and
--- the data access layer move off Supabase.
+-- These are plain local PostgreSQL objects: nothing here connects to an
+-- external service. The application authenticates with NextAuth and reaches
+-- the database as the table owner through the pg pool.
 
 DO $$
 BEGIN

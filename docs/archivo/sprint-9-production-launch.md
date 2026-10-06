@@ -1,3 +1,5 @@
+> **Documento histórico (archivado).** Describe la etapa previa del proyecto sobre servicios en la nube (Supabase, Vercel, Firebase), hoy descontinuados. No refleja la arquitectura on-premise vigente; consulta el [expediente técnico para la OTI](../oti/).
+
 # Sprint 9: Lanzamiento Oficial a Producción v1.0.0 — Buzón Comedor UNSCH
 
 ## Resumen Ejecutivo de Arquitectura y DevOps
