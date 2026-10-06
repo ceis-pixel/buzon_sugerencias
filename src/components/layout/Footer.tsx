@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 
+const linkClasses =
+  "rounded transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary";
+
 export function Footer() {
   return (
     <footer className="print:hidden border-t border-gray-100 bg-white/60">
@@ -12,36 +15,32 @@ export function Footer() {
           servicio del comedor universitario.
         </p>
 
-        {/* Navigation links for FAQs, Transparency and Tracking */}
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] font-semibold text-primary pt-1">
-          <Link
-            href="/preguntas-frecuentes"
-            className="hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
-          >
+        <nav
+          aria-label="Enlaces útiles"
+          className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] font-semibold text-primary pt-1"
+        >
+          <Link href="/preguntas-frecuentes" className={linkClasses}>
             Preguntas Frecuentes
           </Link>
-          <span className="text-neutral-gray/40">•</span>
-          <Link
-            href="/transparencia"
-            className="hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
-          >
-            Mural de Transparencia
+          <span aria-hidden="true" className="text-neutral-gray/40">•</span>
+          <Link href="/preguntas-frecuentes#anonimato" className={linkClasses}>
+            Privacidad y Términos
           </Link>
-          <span className="text-neutral-gray/40">•</span>
-          <Link
-            href="/seguimiento"
-            className="hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
-          >
-            Consultar Ticket
-          </Link>
-        </div>
+        </nav>
 
         <div className="pt-2 text-[11px] text-neutral-gray">
           <p className="font-medium text-gray-800">
-            Secretaría de Salud y Nutrición FUSCH
+            FUSCH (Secretaría de Salud y Nutrición) • CEIS UNSCH
           </p>
           <p>Universidad Nacional de San Cristóbal de Huamanga</p>
         </div>
+
+        <Link
+          href="/admin"
+          className={`inline-block text-[11px] font-normal text-neutral-gray ${linkClasses}`}
+        >
+          Acceso Administrativo
+        </Link>
       </div>
     </footer>
   );

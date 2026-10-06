@@ -183,6 +183,18 @@ describe("CategorySelector component in adaptive chips (Issue 6.2)", () => {
       expect(html).toContain("Infraestructura / Menaje");
     });
 
+    it("shows short chip labels in the order Menú, Cantidad, Higiene, Atención, Infraestructura", () => {
+      const html = renderCategorySelector({
+        value: null,
+        onChange: () => {},
+      });
+
+      const visible = [...html.matchAll(/<span class="text-gray-800">([^<]+)<\/span>/g)].map(
+        (match) => match[1],
+      );
+      expect(visible).toEqual(["Menú", "Cantidad", "Higiene", "Atención", "Infraestructura"]);
+    });
+
     it("highlights the selected chip with Crimson Heritage primary tokens", () => {
       const html = renderCategorySelector({
         value: "portion",

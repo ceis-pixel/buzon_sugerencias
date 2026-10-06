@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   ExternalLink,
+  QrCode,
   Inbox,
   LogOut,
   User,
@@ -136,6 +137,18 @@ export function AdminHeader({ admin }: AdminHeaderProps) {
                 <BarChart3 className="h-4 w-4" />
               </Link>
             </div>
+
+            {/* Printable QR flyer for the dining hall tables */}
+            <Link
+              href="/qr-flyer"
+              target="_blank"
+              rel="noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-neutral-gray/25 px-3 py-1.5 text-xs font-semibold text-neutral-gray transition-colors hover:bg-slate-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              title="Abrir el afiche con código QR para imprimir"
+            >
+              <QrCode className="h-3.5 w-3.5" />
+              <span>Afiche QR</span>
+            </Link>
 
             {/* Link to public portal */}
             <Link

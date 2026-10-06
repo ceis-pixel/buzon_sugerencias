@@ -145,7 +145,8 @@ export function FaqAccordion() {
             return (
               <div
                 key={faq.id}
-                className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs transition-colors hover:border-gray-300"
+                id={faq.id}
+                className="scroll-mt-24 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs transition-colors hover:border-gray-300"
               >
                 <button
                   type="button"

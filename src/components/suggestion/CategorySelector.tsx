@@ -15,7 +15,10 @@ import type { SuggestionCategory } from "@/types/database.types";
 
 export interface CategoryOption {
   id: SuggestionCategory;
+  /** Full name used in reports, tracking and the moderation panel. */
   label: string;
+  /** Compact name shown on the form chips. */
+  shortLabel: string;
   icon: LucideIcon;
 }
 
@@ -23,26 +26,31 @@ export const CATEGORY_OPTIONS: readonly CategoryOption[] = [
   {
     id: "menu",
     label: "Menú / Sabor",
+    shortLabel: "Menú",
     icon: UtensilsCrossed,
-  },
-  {
-    id: "hygiene",
-    label: "Higiene / Limpieza",
-    icon: Sparkles,
   },
   {
     id: "portion",
     label: "Cantidad / Porción",
+    shortLabel: "Cantidad",
     icon: Scale,
+  },
+  {
+    id: "hygiene",
+    label: "Higiene / Limpieza",
+    shortLabel: "Higiene",
+    icon: Sparkles,
   },
   {
     id: "service",
     label: "Trato del Personal",
+    shortLabel: "Atención",
     icon: Users,
   },
   {
     id: "infrastructure",
     label: "Infraestructura / Menaje",
+    shortLabel: "Infraestructura",
     icon: Building2,
   },
 ] as const;
@@ -80,13 +88,7 @@ export function CategorySelector({
   ) => {
     if (disabled) return;
 
-    const categoryKeys: SuggestionCategory[] = [
-      "menu",
-      "hygiene",
-      "portion",
-      "service",
-      "infrastructure",
-    ];
+    const categoryKeys = CATEGORY_OPTIONS.map((option) => option.id);
     const currentIndex = categoryKeys.indexOf(currentCategory);
 
     let nextCategory: SuggestionCategory | null = null;
@@ -131,6 +133,7 @@ export function CategorySelector({
               type="button"
               role="radio"
               aria-checked={isSelected}
+              title={option.label}
               tabIndex={isFocusable ? 0 : -1}
               disabled={disabled}
               onClick={() => onChange(option.id)}
@@ -153,7 +156,7 @@ export function CategorySelector({
                 aria-hidden="true"
               />
               <span className={isSelected ? "font-semibold text-white" : "text-gray-800"}>
-                {option.label}
+                {option.shortLabel}
               </span>
             </button>
           );

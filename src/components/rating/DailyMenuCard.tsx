@@ -7,7 +7,6 @@ import {
   ChevronUp,
   Clock,
   Coffee,
-  Flame,
   Soup,
   Star,
   ThumbsUp,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { MenuRatingWidget } from "@/components/rating/MenuRatingWidget";
+import { getCurrentShift } from "@/components/suggestion/ShiftSelector";
 import { checkHasUserRated, getDailyMenuWithStats } from "@/lib/actions/menuRatingActions";
 import type { DailyMenuWithStats, ShiftType } from "@/types/database.types";
 
@@ -48,19 +48,9 @@ const SHIFT_INFO: Record<
 };
 
 /**
- * Detects current meal shift according to Ayacucho local time.
- */
-function detectCurrentShift(): ShiftType {
-  const hour = new Date().getHours();
-  if (hour < 10) return "breakfast";
-  if (hour < 15) return "lunch";
-  return "dinner";
-}
-
-/**
  * Issue 11.4 — Public Daily Menu Card & Live Satisfaction Thermometer (DailyMenuCard)
  *
- * Prominent home screen card built with the Crimson Heritage Design System:
+ * Compact home screen card built with the Crimson Heritage Design System:
  * - Real-time shift tab switcher and active shift detection.
  * - Presentation of the daily university dining hall menu (Main, Soup, Beverage).
  * - Termómetro de Aceptación: visual progress gauge showing accumulated score and vote volume.
@@ -73,7 +63,7 @@ export function DailyMenuCard({
   className = "",
 }: DailyMenuCardProps) {
   const [activeShift, setActiveShift] = useState<ShiftType>(
-    initialShift || (initialMenu?.shift as ShiftType) || detectCurrentShift(),
+    initialShift || (initialMenu?.shift as ShiftType) || getCurrentShift(),
   );
   const [menuData, setMenuData] = useState<DailyMenuWithStats | null>(initialMenu || null);
   const [hasRated, setHasRated] = useState<boolean>(initialHasRated);
@@ -220,9 +210,9 @@ export function DailyMenuCard({
       </div>
 
       {/* Main Card Content */}
-      <div className="p-4 sm:p-6 space-y-5">
+      <div className="space-y-3 p-4">
         {isLoadingShift ? (
-          <div className="py-8 text-center text-xs text-neutral-gray flex flex-col items-center gap-2">
+          <div className="py-4 text-center text-xs text-neutral-gray flex flex-col items-center gap-2">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <span>Consultando programación de {SHIFT_INFO[activeShift].label}...</span>
           </div>
@@ -247,101 +237,48 @@ export function DailyMenuCard({
                 )}
               </div>
 
-              {/* 3 Dishes Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* Main Dish */}
-                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 flex flex-col justify-between">
-                  <div className="flex items-center gap-2 text-primary mb-1.5">
-                    <Utensils className="h-4 w-4" />
-                    <span className="text-[11px] font-extrabold uppercase tracking-wide">
-                      Plato Principal
-                    </span>
+              {/* Dishes list */}
+              <dl className="divide-y divide-gray-100 rounded-xl border border-gray-100">
+                {[
+                  { label: "Plato principal", value: menuData.main_dish, avg: stats?.avg_main },
+                  { label: "Sopa o entrada", value: menuData.side_dish, avg: stats?.avg_side },
+                  { label: "Bebida", value: menuData.beverage, avg: stats?.avg_beverage },
+                ].map((dish) => (
+                  <div key={dish.label} className="flex items-baseline gap-3 px-3 py-2">
+                    <dt className="w-24 shrink-0 text-[11px] font-bold uppercase tracking-wide text-neutral-gray">
+                      {dish.label}
+                    </dt>
+                    <dd className="min-w-0 flex-1 text-sm font-semibold leading-snug text-gray-900">
+                      {dish.value || "No especificada"}
+                    </dd>
+                    {dish.avg != null && dish.avg > 0 && (
+                      <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-primary">
+                        <Star aria-hidden="true" className="h-3 w-3 fill-primary" />
+                        {dish.avg.toFixed(1)}
+                      </span>
+                    )}
                   </div>
-                  <p className="font-sans text-sm font-bold text-gray-900 leading-snug">
-                    {menuData.main_dish}
-                  </p>
-                  {stats && stats.avg_main > 0 && (
-                    <div className="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-primary">
-                      <Star className="h-3 w-3 fill-primary" />
-                      <span>{stats.avg_main.toFixed(1)} / 5</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Soup / Side Dish */}
-                <div className="rounded-xl border border-secondary/20 bg-secondary/5 p-3.5 flex flex-col justify-between">
-                  <div className="flex items-center gap-2 text-secondary mb-1.5">
-                    <Soup className="h-4 w-4" />
-                    <span className="text-[11px] font-extrabold uppercase tracking-wide">
-                      Sopa o Entrada
-                    </span>
-                  </div>
-                  <p className="font-sans text-sm font-semibold text-gray-800 leading-snug">
-                    {menuData.side_dish || "No especificada"}
-                  </p>
-                  {stats && stats.avg_side !== null && stats.avg_side > 0 && (
-                    <div className="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-secondary">
-                      <Star className="h-3 w-3 fill-secondary" />
-                      <span>{stats.avg_side.toFixed(1)} / 5</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Beverage */}
-                <div className="rounded-xl border border-tertiary/20 bg-tertiary/5 p-3.5 flex flex-col justify-between">
-                  <div className="flex items-center gap-2 text-tertiary mb-1.5">
-                    <Coffee className="h-4 w-4" />
-                    <span className="text-[11px] font-extrabold uppercase tracking-wide">
-                      Refresco / Bebida
-                    </span>
-                  </div>
-                  <p className="font-sans text-sm font-semibold text-gray-800 leading-snug">
-                    {menuData.beverage || "No especificada"}
-                  </p>
-                  {stats && stats.avg_beverage !== null && stats.avg_beverage > 0 && (
-                    <div className="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-tertiary">
-                      <Star className="h-3 w-3 fill-tertiary" />
-                      <span>{stats.avg_beverage.toFixed(1)} / 5</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+                ))}
+              </dl>
             </div>
 
             {/* Satisfaction Thermometer Section */}
-            <div className="rounded-xl border border-gray-100 bg-slate-50/70 p-4 space-y-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Flame className="h-4 w-4 text-primary" />
-                  <span className="font-sans text-xs font-bold uppercase tracking-wider text-gray-900">
-                    Termómetro de Satisfacción en Tiempo Real
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 font-sans text-sm font-extrabold text-gray-900">
-                    <Star className="h-4 w-4 fill-amber-400 stroke-amber-500" />
-                    {overallAvg > 0 ? overallAvg.toFixed(1) : "—"} / 5.0
-                  </span>
-                  <span className="text-xs text-neutral-gray">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-semibold text-gray-800">{thermometerFeedback.label}</span>
+                <span className="flex shrink-0 items-center gap-1 font-bold text-gray-900">
+                  <Star aria-hidden="true" className="h-3.5 w-3.5 fill-amber-400 stroke-amber-500" />
+                  {overallAvg > 0 ? overallAvg.toFixed(1) : "—"} / 5
+                  <span className="font-normal text-neutral-gray">
                     ({ratingCount} voto{ratingCount === 1 ? "" : "s"})
                   </span>
-                </div>
+                </span>
               </div>
-
-              {/* Progress Bar Gauge */}
-              <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-200/80">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80">
                 <div
                   className={`h-full transition-all duration-700 ease-out ${thermometerFeedback.barColor}`}
                   style={{ width: `${thermometerFeedback.percentage}%` }}
                 />
-              </div>
-
-              {/* Micro-interpretation */}
-              <div className="flex flex-wrap items-center justify-between text-[11px] text-neutral-gray gap-2">
-                <span className="font-semibold text-gray-800">
-                  Estado: {thermometerFeedback.label}
-                </span>
-                <span>{thermometerFeedback.description}</span>
               </div>
             </div>
 
@@ -363,9 +300,7 @@ export function DailyMenuCard({
                   >
                     <span className="flex items-center gap-2">
                       <Star className="h-4 w-4 fill-primary" />
-                      {isFormOpen
-                        ? "Ocultar formulario de evaluación"
-                        : "Calificar Menú de este Turno (1 Toque)"}
+                      {isFormOpen ? "Ocultar calificación" : "Calificar el menú de este turno"}
                     </span>
                     {isFormOpen ? (
                       <ChevronUp className="h-4 w-4" />
@@ -395,8 +330,8 @@ export function DailyMenuCard({
           </>
         ) : (
           /* Empty State: Menu not registered yet */
-          <div className="rounded-xl border border-dashed border-neutral-gray/25 p-8 text-center">
-            <Utensils className="mx-auto h-8 w-8 text-neutral-gray/70 mb-2" />
+          <div className="rounded-xl border border-dashed border-neutral-gray/25 p-4 text-center">
+            <Utensils className="mx-auto h-6 w-6 text-neutral-gray/70 mb-2" />
             <h4 className="font-sans text-sm font-bold text-gray-800">
               Menú aún no publicado para el turno de {SHIFT_INFO[activeShift].label}
             </h4>

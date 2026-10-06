@@ -3,11 +3,7 @@
 import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Send,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { Send, ShieldCheck } from "lucide-react";
 
 import { AlertBanner } from "@/components/common/AlertBanner";
 import { Badge } from "@/components/common/Badge";
@@ -284,21 +280,16 @@ export function SuggestionForm({
       >
         {/* Header with Didactic Anonymity Reminder */}
         <CardHeader className="flex-col items-start gap-2 border-b border-gray-100 bg-slate-50/60 p-5 sm:p-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant="tertiary"
-              size="sm"
-              icon={<ShieldCheck className="size-3.5" />}
-            >
-              100% Anónimo
-            </Badge>
-            <Badge variant="secondary" size="sm" icon={<Sparkles className="size-3.5" />}>
-              Comedor Universitario UNSCH
-            </Badge>
-          </div>
+          <Badge
+            variant="tertiary"
+            size="md"
+            icon={<ShieldCheck className="size-3.5" />}
+          >
+            100% Anónimo • Ley N.º 29733
+          </Badge>
 
           <CardTitle as="h2" className="text-xl sm:text-2xl text-primary font-bold">
-            Buzón de Sugerencias y Reclamos
+            Envía tu sugerencia o reclamo
           </CardTitle>
 
           <CardDescription className="max-w-2xl text-sm leading-relaxed text-neutral-gray">
@@ -351,9 +342,9 @@ export function SuggestionForm({
                   id="form-shift-title"
                   className="text-xs font-bold uppercase tracking-wider text-neutral-gray"
                 >
-                  1. Turno de atención <span className="text-primary">*</span>
+                  Turno de atención <span className="text-primary">*</span>
                 </h3>
-                <span className="text-[11px] text-neutral-gray">Detección inteligente</span>
+                <span className="text-[11px] text-neutral-gray">Sugerido según la hora</span>
               </div>
 
               <Controller
@@ -381,7 +372,7 @@ export function SuggestionForm({
                   id="form-category-title"
                   className="text-xs font-bold uppercase tracking-wider text-neutral-gray"
                 >
-                  2. Categoría de la observación <span className="text-primary">*</span>
+                  Categoría de la observación <span className="text-primary">*</span>
                 </h3>
                 <span className="text-[11px] text-neutral-gray">Toca una opción</span>
               </div>
@@ -418,7 +409,7 @@ export function SuggestionForm({
                   id="form-media-title"
                   className="text-xs font-bold uppercase tracking-wider text-neutral-gray"
                 >
-                  4. Evidencia fotográfica (opcional)
+                  Evidencia fotográfica (opcional)
                 </h3>
                 <span className="text-[11px] text-neutral-gray">Máx. 1 foto</span>
               </div>
@@ -449,23 +440,21 @@ export function SuggestionForm({
               <SubmissionLoadingState stage={submissionStage} className="w-full" />
             )}
 
-            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 w-full">
-              <p className="text-xs text-neutral-gray">
-                Al enviar, confirmas que la información corresponde a tu experiencia personal.
-              </p>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              fullWidth
+              isLoading={isFormLocked}
+              disabled={isFormLocked}
+              leftIcon={<Send className="size-4" />}
+            >
+              {isFormLocked ? getButtonLoadingText() : "Enviar Sugerencia Anónima"}
+            </Button>
 
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                isLoading={isFormLocked}
-                disabled={isFormLocked}
-                leftIcon={<Send className="size-4" />}
-                className="w-full sm:w-auto"
-              >
-                {isFormLocked ? getButtonLoadingText() : "Enviar Sugerencia Anónima"}
-              </Button>
-            </div>
+            <p className="w-full text-center text-xs text-neutral-gray">
+              Al enviar, confirmas que la información corresponde a tu experiencia personal.
+            </p>
           </CardFooter>
         </form>
       </Card>

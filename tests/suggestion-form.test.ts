@@ -120,18 +120,25 @@ describe("SuggestionForm full integration (Issue 6.4)", () => {
     const html = renderSuggestionForm();
 
     // Anonymity header
-    expect(html).toContain("100% Anónimo");
-    expect(html).toContain("Buzón de Sugerencias y Reclamos");
+    expect(html).toContain("100% Anónimo • Ley N.º 29733");
+    expect(html).toContain("Envía tu sugerencia o reclamo");
     expect(html).toContain("Tu identidad se mantiene 100% en reserva");
 
     // Sections
-    expect(html).toContain("1. Turno de atención");
-    expect(html).toContain("2. Categoría de la observación");
+    expect(html).toContain("Turno de atención");
+    expect(html).toContain("Categoría de la observación");
     expect(html).toContain("Detalle de tu observación");
-    expect(html).toContain("4. Evidencia fotográfica (opcional)");
+    expect(html).toContain("Evidencia fotográfica (opcional)");
 
     // Submit button
     expect(html).toContain("Enviar Sugerencia Anónima");
     expect(html).toContain('type="submit"');
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*class="[^"]*w-full/);
+  });
+
+  it("carries no development or sprint wording", () => {
+    const html = renderSuggestionForm();
+
+    expect(html).not.toMatch(/Sprint|Issue \d|Demostración|Simular/);
   });
 });
