@@ -68,7 +68,9 @@ services:
       UPLOAD_DIR: /app/uploads
       TZ: America/Lima
     ports:
-      - "3000:3000"
+      # Loopback only: the public entry point is the proxy (or the institutional
+      # reverse proxy). Published ports bypass host firewalls such as ufw.
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:3000:3000"
     volumes:
       - app_uploads:/app/uploads
     init: true

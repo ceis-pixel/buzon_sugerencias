@@ -108,6 +108,18 @@ describe("createAnonymousSuggestion — dissociated insertion (Ley N.º 29733)",
     expect(fields.map((field) => field.name)).not.toContain("suggestion_id");
   });
 
+  it("stamps quota rows with the day only, so they cannot be matched to a suggestion by time", async () => {
+    const { rows } = await db.query<{ precise: number; shared: number }>(
+      `SELECT (SELECT count(*)::int FROM public.submission_rate_limits
+                WHERE created_at <> date_trunc('day', created_at)
+                   OR updated_at <> date_trunc('day', updated_at)) AS precise,
+              (SELECT count(*)::int FROM public.submission_rate_limits l
+                 JOIN public.suggestions s
+                   ON s.created_at IN (l.created_at, l.updated_at)) AS shared`,
+    );
+    expect(rows[0]).toEqual({ precise: 0, shared: 0 });
+  });
+
   it("answers the third report of the same shift with a 429-style error and inserts nothing", async () => {
     const input = {
       email: STUDENT,
@@ -366,6 +378,15 @@ describe("menu rating service — one anonymous vote per shift", () => {
       "rating_main", "rating_side", "shift",
     ]);
     expect(await dumpDatabase()).not.toContain(STUDENT);
+
+    // The quota row keeps the day only; the rating keeps its precise instant.
+    const stamps = await db.query<{ precise: number; shared: number }>(
+      `SELECT (SELECT count(*)::int FROM public.menu_rating_limits
+                WHERE created_at <> date_trunc('day', created_at)) AS precise,
+              (SELECT count(*)::int FROM public.menu_rating_limits l
+                 JOIN public.menu_ratings r ON r.created_at = l.created_at) AS shared`,
+    );
+    expect(stamps.rows[0]).toEqual({ precise: 0, shared: 0 });
 
     const duplicate = createMenuRating({ email: STUDENT, menuId, shift: "lunch", ratingMain: 1, now: NOW });
     await expect(duplicate).rejects.toBeInstanceOf(MenuRatingError);

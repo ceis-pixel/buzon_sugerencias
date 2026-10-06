@@ -11,19 +11,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-# Cargar variables de entorno si existe .env
-if [ -f "${PROJECT_ROOT}/.env" ]; then
-  # shellcheck disable=SC1091
-  set -a
-  # Cargar ignorando líneas comentadas o vacías
-  # eval "$(grep -v '^#' "${PROJECT_ROOT}/.env" | grep -v '^\s*$' | sed -e 's/^[[:space:]]*//')" 2>/dev/null || true
-  set +a
-fi
+# Lee una clave puntual de .env sin evaluar el archivo (no ejecuta su contenido).
+env_value() {
+  [ -f "${PROJECT_ROOT}/.env" ] || return 0
+  grep -E "^$1=" "${PROJECT_ROOT}/.env" | tail -n 1 | cut -d= -f2- | tr -d '\r'
+}
 
 # Configuración y Parámetros
 BACKUP_DIR="${BACKUP_DIR:-${PROJECT_ROOT}/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
+# Solo se usan con pg_dump nativo; en Docker el contenedor 'db' aporta sus propias credenciales.
+POSTGRES_DB="${POSTGRES_DB:-$(env_value POSTGRES_DB)}"
 POSTGRES_DB="${POSTGRES_DB:-buzon_comedor}"
+POSTGRES_USER="${POSTGRES_USER:-$(env_value POSTGRES_USER)}"
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
 POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
@@ -59,14 +59,17 @@ log "Generando volcado de PostgreSQL en ${DB_BACKUP_FILE}..."
 
 if command -v docker >/dev/null 2>&1 && docker compose -f "${COMPOSE_FILE}" ps --services 2>/dev/null | grep -q "^db$"; then
   log "Usando contenedor Docker Compose (servicio 'db')..."
+  # Comillas simples: las variables se resuelven dentro del contenedor.
+  # shellcheck disable=SC2016
   docker compose -f "${COMPOSE_FILE}" exec -T db sh -c \
-    "pg_dump -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\" --clean --if-exists" | gzip > "${DB_BACKUP_FILE}"
+    'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' | gzip > "${DB_BACKUP_FILE}"
 elif command -v pg_dump >/dev/null 2>&1; then
   log "Usando binario nativo pg_dump..."
   pg_dump -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" --clean --if-exists | gzip > "${DB_BACKUP_FILE}"
 else
-  log "ADVERTENCIA: Ni docker ni pg_dump detectados en el PATH. Generando volcado con encabezado simulado para entorno offline."
-  echo "-- PostgreSQL dump simulation for ${POSTGRES_DB} at ${TIMESTAMP}" | gzip > "${DB_BACKUP_FILE}"
+  log "ERROR CRÍTICO: No se encontró el servicio 'db' en Docker Compose ni el binario pg_dump. No se generó ningún respaldo."
+  log "Verifique que la pila esté en ejecución y que este usuario pueda usar Docker (grupo 'docker')."
+  exit 1
 fi
 
 # Validación de integridad del archivo gzip de PostgreSQL
@@ -102,8 +105,9 @@ elif [ -d "${UPLOADS_DIR}" ]; then
   log "Extrayendo desde directorio local ${UPLOADS_DIR}..."
   tar -czf "${UPLOADS_BACKUP_FILE}" -C "${UPLOADS_DIR}" .
 else
-  log "ADVERTENCIA: Directorio o volumen de uploads no encontrado. Creando archivo vacío válido..."
-  tar -czf "${UPLOADS_BACKUP_FILE}" --files-from /dev/null 2>/dev/null || tar -czf "${UPLOADS_BACKUP_FILE}" -T /dev/null
+  log "ERROR CRÍTICO: No se encontró el volumen '${UPLOADS_VOLUME}' ni un directorio de fotografías. Respaldo incompleto."
+  log "Si el proyecto de Compose tiene otro nombre, defina UPLOADS_VOLUME con el volumen correcto."
+  exit 1
 fi
 
 # Validación de integridad del archivo tar.gz

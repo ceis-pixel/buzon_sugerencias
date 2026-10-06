@@ -50,7 +50,9 @@ ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL} \
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+# The maintenance bundle lands inside .next/standalone, so the runner stage
+# ships it without tsx or the scripts/ folder (see nightly-cleanup.sh).
+RUN npm run build && npm run build:maintenance
 
 # ---------------------------------------------------------------------------
 # Stage 3: runner

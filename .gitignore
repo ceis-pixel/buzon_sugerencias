@@ -52,3 +52,7 @@ ui-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Respaldos y registros operativos (contienen volcados de la base de datos)
+/backups/
+/logs/

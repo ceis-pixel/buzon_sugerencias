@@ -57,13 +57,15 @@ export async function createAnonymousSuggestion(
   const rateHash = generateRateHash(input.email, input.shift, submissionDate);
 
   return withTransaction(async (tx) => {
+    // Quota rows are stamped with the calendar day only. Sharing the precise
+    // transaction timestamp with the suggestion would let the two rows be
+    // matched, defeating the dissociation.
     const quota = await tx.query<{ submission_count: number }>(
       `INSERT INTO public.submission_rate_limits AS limits
-              (rate_hash, shift, submission_date, submission_count)
-       VALUES ($1, $2, $3, 1)
+              (rate_hash, shift, submission_date, submission_count, created_at, updated_at)
+       VALUES ($1, $2, $3, 1, $3::date, $3::date)
        ON CONFLICT (rate_hash, shift, submission_date)
-       DO UPDATE SET submission_count = limits.submission_count + 1,
-                     updated_at = now()
+       DO UPDATE SET submission_count = limits.submission_count + 1
                WHERE limits.submission_count < $4
        RETURNING submission_count`,
       [rateHash, input.shift, submissionDate, MAX_SUBMISSIONS_PER_SHIFT],

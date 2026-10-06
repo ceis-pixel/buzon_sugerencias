@@ -10,8 +10,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
+# Lee una clave puntual de .env sin evaluar el archivo (no ejecuta su contenido).
+env_value() {
+  [ -f "${PROJECT_ROOT}/.env" ] || return 0
+  grep -E "^$1=" "${PROJECT_ROOT}/.env" | tail -n 1 | cut -d= -f2- | tr -d '\r'
+}
+
 # Configuración
+# Solo se usan con psql nativo; en Docker el contenedor 'db' aporta sus propias credenciales.
+POSTGRES_DB="${POSTGRES_DB:-$(env_value POSTGRES_DB)}"
 POSTGRES_DB="${POSTGRES_DB:-buzon_comedor}"
+POSTGRES_USER="${POSTGRES_USER:-$(env_value POSTGRES_USER)}"
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
 POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
@@ -126,20 +135,25 @@ TERMINATE_SQL="SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datn
 if command -v docker >/dev/null 2>&1 && docker compose -f "${COMPOSE_FILE}" ps --services 2>/dev/null | grep -q "^db$"; then
   log "Ejecutando restauración transaccional vía Docker Compose (servicio 'db')..."
   
+  # Comillas simples: las variables se resuelven dentro del contenedor.
   # Terminar conexiones activas
-  docker compose -f "${COMPOSE_FILE}" exec -T db sh -c \
-    "psql -U \"${POSTGRES_USER}\" -d postgres -c \"${TERMINATE_SQL}\"" || true
+  # shellcheck disable=SC2016
+  echo "SELECT count(pg_terminate_backend(pid)) AS conexiones_cerradas FROM pg_stat_activity WHERE datname = :'target_db' AND pid <> pg_backend_pid();" \
+    | docker compose -f "${COMPOSE_FILE}" exec -T db sh -c \
+      'psql -q -U "$POSTGRES_USER" -d postgres -v target_db="$POSTGRES_DB"' || true
 
   # Restauración transaccional con ON_ERROR_STOP
+  # shellcheck disable=SC2016
   gunzip -c "${SQL_BACKUP}" | docker compose -f "${COMPOSE_FILE}" exec -T db sh -c \
-    "psql -v ON_ERROR_STOP=1 --single-transaction -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\""
+    'psql -q -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 
 elif command -v psql >/dev/null 2>&1; then
   log "Ejecutando restauración transaccional vía psql nativo..."
   psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d postgres -c "${TERMINATE_SQL}" || true
   gunzip -c "${SQL_BACKUP}" | psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -v ON_ERROR_STOP=1 --single-transaction
 else
-  log "ADVERTENCIA: Ni docker ni psql detectados. Simulando restauración offline."
+  log "ERROR CRÍTICO: No se encontró el servicio 'db' en Docker Compose ni el binario psql. No se restauró nada."
+  exit 1
 fi
 
 log "Restauración de PostgreSQL completada."
@@ -174,12 +188,11 @@ log "Ejecutando verificación de integridad post-restauración..."
 VERIFY_SQL="SELECT 'suggestions' AS tabla, count(*)::int AS registros FROM public.suggestions UNION ALL SELECT 'admins', count(*)::int FROM public.admins UNION ALL SELECT 'daily_menus', count(*)::int FROM public.daily_menus;"
 
 if command -v docker >/dev/null 2>&1 && docker compose -f "${COMPOSE_FILE}" ps --services 2>/dev/null | grep -q "^db$"; then
-  docker compose -f "${COMPOSE_FILE}" exec -T db sh -c \
-    "psql -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\" -c \"${VERIFY_SQL}\"" || true
+  # shellcheck disable=SC2016
+  echo "${VERIFY_SQL}" | docker compose -f "${COMPOSE_FILE}" exec -T db sh -c \
+    'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' || true
 elif command -v psql >/dev/null 2>&1; then
   psql -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c "${VERIFY_SQL}" || true
-else
-  log "Verificación post-restauración simulada: Tablas suggestions, admins, daily_menus verificadas."
 fi
 
 log "RESTAURACIÓN COMPLETADA SATISFACTORIAMENTE (RTO objetivo cumplido)."

@@ -148,8 +148,9 @@ export async function createMenuRating(input: MenuRatingInput): Promise<MenuRati
     }
 
     const quota = await tx.query<{ id: string }>(
-      `INSERT INTO public.menu_rating_limits (rate_hash, shift, rating_date)
-       VALUES ($1, $2, $3)
+      // Day-only timestamp: it must not match the rating's precise created_at.
+      `INSERT INTO public.menu_rating_limits (rate_hash, shift, rating_date, created_at)
+       VALUES ($1, $2, $3, $3::date)
        ON CONFLICT (rate_hash, shift, rating_date) DO NOTHING
        RETURNING id`,
       [rateHash, input.shift, ratingDate],
