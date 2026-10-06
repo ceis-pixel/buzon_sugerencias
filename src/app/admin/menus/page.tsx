@@ -7,7 +7,7 @@ import { getVerifiedAdmin } from "@/lib/auth/session";
 export const metadata: Metadata = {
   title: "Gestión de Menús Diarios y Calificaciones • Comedor UNSCH",
   description:
-    "Módulo de publicación y control nutricional de la FUSCH. Programación diaria de platos y auditoría del termómetro estudiantil.",
+    "Módulo de publicación de menús de la JVC. Programación diaria de platos y auditoría del termómetro estudiantil.",
 };
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 /**
  * /admin/menus — Daily Menus & Nutritional Management (Sprint 11 - Issue 11.5)
  *
- * Protected administrative view for FUSCH and dining hall commission:
+ * Protected administrative view for the dining hall oversight board (JVC):
  * - Register and schedule daily menus per meal shift (Breakfast, Lunch, Dinner).
  * - Weekly historical log with consolidated satisfaction scores and total votes.
  * - One-click toggle to open/close live rating submissions for finished shifts.

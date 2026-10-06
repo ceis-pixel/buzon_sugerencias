@@ -3,7 +3,7 @@
 **Sistema:** Buzón de Sugerencias — Comedor Universitario UNSCH
 **Versión:** v1.0.0-onpremise
 **Destinatarios:** Jefatura de la OTI y equipo de Desarrollo
-**Elaborado por:** CEIS, por encargo de la FUSCH
+**Elaborado por:** CEIS, por encargo de la Junta de Vigilancia del Comedor Universitario (JVC)
 **Fecha:** octubre de 2026
 
 ---
@@ -13,8 +13,8 @@
 El Buzón de Sugerencias es una aplicación web que permite a los comensales del
 comedor universitario enviar observaciones anónimas sobre el servicio (menú,
 higiene, porciones, atención e infraestructura), calificar el menú del día y
-hacer seguimiento de su caso con un código de ticket. La Comisión de Comedor de
-la FUSCH responde cada caso desde un panel de moderación y publica las mejoras
+hacer seguimiento de su caso con un código de ticket. La Junta de Vigilancia
+del Comedor Universitario (JVC) responde cada caso desde un panel de moderación y publica las mejoras
 en un mural de transparencia.
 
 El sistema se entrega para operar **íntegramente en servidores de la UNSCH**:

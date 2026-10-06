@@ -8,7 +8,7 @@ anónima, califiquen el menú del día y hagan seguimiento de su caso.
 | --- | --- |
 | **Versión** | v1.0.0-onpremise |
 | **Desarrollo** | CEIS |
-| **Área usuaria** | FUSCH — Comisión de Comedor |
+| **Área usuaria** | Junta de Vigilancia del Comedor Universitario (JVC) |
 | **Operación** | Oficina de Tecnologías de la Información (OTI) |
 | **Despliegue** | On-premise, en servidores de la UNSCH, con Docker |
 
@@ -21,7 +21,7 @@ anónima, califiquen el menú del día y hagan seguimiento de su caso.
   la respuesta oficial.
 - **Calificación del menú.** Un voto por turno, con el promedio visible en
   tiempo real.
-- **Panel de moderación.** La comisión revisa la bandeja, responde, publica el
+- **Consola de fiscalización.** La JVC revisa la bandeja, responde, publica el
   menú diario, consulta la analítica y exporta reportes.
 - **Mural de transparencia.** Lista pública de los casos resueltos y las
   medidas adoptadas.
@@ -173,5 +173,6 @@ la nube, hoy descontinuados. No aplican a esta versión.
 
 ## Créditos
 
-Desarrollado por el CEIS para la FUSCH, con transferencia tecnológica a la OTI
+Desarrollado por el CEIS para la Junta de Vigilancia del Comedor Universitario
+(JVC), con transferencia tecnológica a la OTI
 de la Universidad Nacional de San Cristóbal de Huamanga.

@@ -129,7 +129,7 @@ export function DailyMenuCard({
       return {
         tone: "warning",
         label: "Aceptación Regular",
-        description: "Opiniones divididas. La FUSCH monitorea la calidad del servicio.",
+        description: "Opiniones divididas. La JVC monitorea la calidad del servicio.",
         barColor: "bg-amber-500",
         percentage: pct,
       };
@@ -336,7 +336,7 @@ export function DailyMenuCard({
               Menú aún no publicado para el turno de {SHIFT_INFO[activeShift].label}
             </h4>
             <p className="mt-1 text-xs text-neutral-gray max-w-sm mx-auto">
-              La Comisión de Comedor de la FUSCH publicará la programación de este turno antes de
+              La Junta de Vigilancia del Comedor (JVC) publicará la programación de este turno antes de
               iniciar el servicio de atención.
             </p>
           </div>

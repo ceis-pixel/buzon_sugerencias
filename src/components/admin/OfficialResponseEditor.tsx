@@ -1,24 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  MessageSquare,
-  Send,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Eye, Send, Zap } from "lucide-react";
 
 import { AlertBanner } from "@/components/common/AlertBanner";
 import { Button } from "@/components/common/Button";
 import { saveOfficialResponse } from "@/lib/actions/adminActions";
 import { formatPeruvianDateTime } from "@/lib/utils/exportReport";
-import {
-  officialResponseSchema,
-  type OfficialResponseInput,
-} from "@/lib/validations/responseSchema";
+import { officialResponseSchema } from "@/lib/validations/responseSchema";
 import type { SuggestionRow, TicketResponseRow } from "@/types/database.types";
 
 export interface OfficialResponseEditorProps {
@@ -31,14 +22,60 @@ export interface OfficialResponseEditorProps {
   ) => void;
 }
 
+type ResponseStatus = "in_review" | "resolved";
+
+interface ResponseFormValues {
+  suggestionId: string;
+  responseText: string;
+}
+
+const MAX_LENGTH = 600;
+
+/** One-click institutional answers the JVC issues most often. */
+export const CANNED_RESPONSES: readonly { label: string; text: string }[] = [
+  {
+    label: "Porción",
+    text: "Observación comunicada a los concesionarios para corregir la porción del turno.",
+  },
+  {
+    label: "Higiene",
+    text: "Se realizó la inspección higiénica en cocina y se aplicaron las medidas correctivas.",
+  },
+  {
+    label: "Menaje",
+    text: "Derivado a la administración de Bienestar Universitario para reposición de menaje.",
+  },
+];
+
+const STATUS_CHOICES: readonly {
+  value: ResponseStatus;
+  label: string;
+  hint: string;
+  icon: typeof Eye;
+  selectedTone: string;
+}[] = [
+  {
+    value: "in_review",
+    label: "En Revisión",
+    hint: "Respuesta provisional. Visible en el seguimiento del ticket.",
+    icon: Eye,
+    selectedTone: "border-tertiary bg-tertiary/10 text-tertiary",
+  },
+  {
+    value: "resolved",
+    label: "Atendido",
+    hint: "Cierra el caso. Visible en el seguimiento y en el mural de transparencia.",
+    icon: CheckCircle2,
+    selectedTone: "border-emerald-500 bg-emerald-50 text-emerald-900",
+  },
+];
+
 /**
- * Issue 8.5 — OfficialResponseEditor
- *
- * Structured editor for official FUSCH responses to student feedback:
- * - Integrated with React Hook Form + Zod (15 to 600 characters).
- * - Real-time character counter and validation feedback.
- * - Displays previous response metadata (responder email + Peruvian timestamp).
- * - On save, automatically updates ticket status to 'resolved' and syncs with public tracking.
+ * Official response editor for the JVC:
+ * - Canned responses that fill the text in one click.
+ * - React Hook Form + Zod validation (15 to 600 characters) with a live counter.
+ *   The server strips markup before storing the text.
+ * - Target status selector: `in_review` (provisional) or `resolved`.
  */
 export function OfficialResponseEditor({
   suggestionId,
@@ -48,31 +85,37 @@ export function OfficialResponseEditor({
 }: OfficialResponseEditorProps) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [responseText, setResponseText] = useState(
-    existingResponse?.response_text ?? "",
-  );
+  const [targetStatus, setTargetStatus] = useState<ResponseStatus>("resolved");
 
   const {
+    control,
     register,
     handleSubmit,
+    setValue,
+    setFocus,
     formState: { errors, isSubmitting },
-  } = useForm<OfficialResponseInput>({
-    resolver: zodResolver(officialResponseSchema),
+  } = useForm<ResponseFormValues>({
+    resolver: zodResolver(officialResponseSchema.omit({ status: true })),
     defaultValues: {
       suggestionId,
       responseText: existingResponse?.response_text ?? "",
     },
   });
 
+  const responseText = useWatch({ control, name: "responseText" }) ?? "";
   const charCount = responseText.trim().length;
 
-  const { onChange: formOnChange, ...restRegister } = register("responseText");
+  const applyCannedResponse = (text: string) => {
+    setValue("responseText", text, { shouldDirty: true, shouldValidate: true });
+    setSuccessMessage(null);
+    setFocus("responseText");
+  };
 
-  const onSubmit = async (data: OfficialResponseInput) => {
+  const onSubmit = async (data: ResponseFormValues) => {
     setServerError(null);
     setSuccessMessage(null);
 
-    const result = await saveOfficialResponse(data);
+    const result = await saveOfficialResponse({ ...data, status: targetStatus });
 
     if (!result.success || !result.data) {
       setServerError(
@@ -83,106 +126,144 @@ export function OfficialResponseEditor({
     }
 
     setSuccessMessage(
-      "Respuesta institucional guardada exitosamente. El ticket ha sido marcado como «Atendido».",
+      targetStatus === "resolved"
+        ? "Respuesta publicada. El reporte quedó como «Atendido» y ya es visible en el seguimiento y en el mural de transparencia."
+        : "Respuesta publicada. El reporte quedó «En Revisión» y ya es visible en el seguimiento del ticket.",
     );
     onResponseSaved(result.data.response, result.data.suggestion);
   };
 
   return (
-    <div className="rounded-xl border border-neutral-gray/25 bg-slate-50/70 p-4 sm:p-5">
-      <div className="flex items-center justify-between border-b border-neutral-gray/15 pb-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <MessageSquare className="h-4 w-4" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-gray-900">
-              Respuesta Oficial de la Comisión (FUSCH)
-            </h3>
-            <p className="text-xs text-neutral-gray">
-              Visible para el estudiante al consultar el ticket #{ticketCode}
-            </p>
-          </div>
+    <section aria-labelledby="official-response-title" className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 id="official-response-title" className="text-sm font-bold text-gray-900">
+            Respuesta oficial de la JVC
+          </h3>
+          <p className="text-xs text-neutral-gray">
+            La verá el estudiante al consultar el ticket {ticketCode}.
+          </p>
         </div>
-
         {existingResponse && (
-          <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
-            <CheckCircle2 className="h-3 w-3" />
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
+            <CheckCircle2 aria-hidden="true" className="size-3" />
             Ya respondido
           </span>
         )}
       </div>
 
-      {/* Existing response metadata note */}
       {existingResponse && (
-        <div className="mt-3 rounded-lg border border-neutral-gray/20 bg-white p-3 text-xs text-neutral-gray space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="font-semibold text-gray-800">
-              Última respuesta registrada por:
-            </span>
-            <span className="font-mono text-primary font-medium">
-              {existingResponse.responder_email}
-            </span>
-          </div>
-          <div className="flex items-center gap-1 text-[11px]">
-            <Clock className="h-3 w-3 text-neutral-gray" />
-            <span>
-              Registrado el{" "}
-              {formatPeruvianDateTime(existingResponse.created_at)}
-            </span>
-          </div>
-        </div>
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg border border-neutral-gray/20 bg-white px-3 py-2 text-[11px] text-neutral-gray">
+          <Clock aria-hidden="true" className="size-3 shrink-0" />
+          Última edición: {formatPeruvianDateTime(existingResponse.updated_at ?? existingResponse.created_at)}
+          <span aria-hidden="true">·</span>
+          <span className="break-all font-mono font-medium text-primary">
+            {existingResponse.responder_email}
+          </span>
+        </p>
       )}
 
-      {/* Response Form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-3">
-        <input type="hidden" {...register("suggestionId")} value={suggestionId} />
+      {/* Canned responses */}
+      <div className="space-y-2">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
+          <Zap aria-hidden="true" className="size-3.5 text-secondary" />
+          Plantillas de respuesta rápida
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {CANNED_RESPONSES.map((canned) => (
+            <button
+              key={canned.label}
+              type="button"
+              onClick={() => applyCannedResponse(canned.text)}
+              className="min-h-11 rounded-xl border border-neutral-gray/25 bg-white px-3 py-2 text-left text-xs leading-snug text-gray-800 transition-colors hover:border-secondary/60 hover:bg-secondary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              <span className="mr-1.5 font-bold text-secondary">{canned.label}:</span>
+              {canned.text}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+        <input type="hidden" {...register("suggestionId")} />
 
         <div className="space-y-1.5">
           <label
             htmlFor="official-response-text"
             className="block text-xs font-semibold text-gray-700"
           >
-            Detalle de la respuesta o medidas adoptadas:
+            Detalle de la respuesta o medidas adoptadas
           </label>
           <textarea
             id="official-response-text"
-            rows={4}
-            maxLength={600}
-            placeholder="Estimado(a) estudiante: Agradecemos tu observación. La Comisión de Salud y Nutrición de la FUSCH inspeccionó el comedor y coordinó con el concesionario para..."
-            value={responseText}
-            {...restRegister}
-            onChange={(e) => {
-              setResponseText(e.target.value);
-              formOnChange(e);
-            }}
-            className={`block w-full resize-y rounded-xl border bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-neutral-gray/60 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 ${
+            rows={5}
+            maxLength={MAX_LENGTH}
+            placeholder="Describe la verificación realizada y la medida adoptada por la JVC."
+            aria-invalid={Boolean(errors.responseText)}
+            aria-describedby="official-response-help"
+            {...register("responseText")}
+            className={`block w-full resize-y rounded-xl border bg-white px-3.5 py-2.5 text-sm leading-relaxed text-gray-900 shadow-sm placeholder:text-neutral-gray/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
               errors.responseText ? "border-primary" : "border-neutral-gray/30"
             }`}
           />
 
-          <div className="flex items-center justify-between text-xs">
+          <div id="official-response-help" className="flex items-start justify-between gap-3 text-xs">
             {errors.responseText ? (
-              <span className="font-medium text-primary flex items-center gap-1">
-                <AlertCircle className="h-3.5 w-3.5" />
+              <span role="alert" className="flex items-center gap-1 font-medium text-primary">
+                <AlertCircle aria-hidden="true" className="size-3.5 shrink-0" />
                 {errors.responseText.message}
               </span>
             ) : (
-              <span className="text-neutral-gray/80">
-                Mínimo 15 caracteres significativos
+              <span className="text-neutral-gray">
+                Entre 15 y {MAX_LENGTH} caracteres. Se guarda como texto plano.
               </span>
             )}
             <span
-              className={`font-mono text-xs ${
-                charCount > 550 ? "text-amber-700 font-bold" : "text-neutral-gray"
+              className={`shrink-0 tabular-nums ${
+                charCount > MAX_LENGTH - 50 ? "font-bold text-amber-700" : "text-neutral-gray"
               }`}
             >
-              {charCount}/600 caracteres
+              {charCount}/{MAX_LENGTH}
             </span>
           </div>
         </div>
 
-        {/* Server Feedback Banners */}
+        <fieldset className="space-y-2">
+          <legend className="text-xs font-semibold text-gray-700">
+            Estado del reporte al publicar
+          </legend>
+          <div className="grid grid-cols-2 gap-2">
+            {STATUS_CHOICES.map((choice) => {
+              const Icon = choice.icon;
+              const isSelected = targetStatus === choice.value;
+              return (
+                <label
+                  key={choice.value}
+                  className={`flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-2 text-xs font-bold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/40 ${
+                    isSelected
+                      ? choice.selectedTone
+                      : "border-neutral-gray/20 bg-white text-gray-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="response-target-status"
+                    value={choice.value}
+                    checked={isSelected}
+                    onChange={() => setTargetStatus(choice.value)}
+                    className="sr-only"
+                  />
+                  <Icon aria-hidden="true" className="size-3.5" />
+                  {choice.label}
+                </label>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-neutral-gray">
+            {STATUS_CHOICES.find((choice) => choice.value === targetStatus)?.hint}
+          </p>
+        </fieldset>
+
         {serverError && (
           <AlertBanner
             variant="error"
@@ -192,34 +273,20 @@ export function OfficialResponseEditor({
         )}
 
         {successMessage && (
-          <AlertBanner
-            variant="success"
-            title="Respuesta guardada"
-            description={successMessage}
-          />
+          <AlertBanner variant="success" title="Respuesta guardada" description={successMessage} />
         )}
 
-        {/* Submit Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-          <p className="text-[11px] text-neutral-gray italic">
-            * Guardar esta respuesta marcará automáticamente la sugerencia como{" "}
-            <strong className="text-emerald-700">Atendida</strong>.
-          </p>
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            isLoading={isSubmitting}
-            leftIcon={<Send className="h-3.5 w-3.5" />}
-            className="w-full sm:w-auto"
-          >
-            {existingResponse
-              ? "Actualizar Respuesta Oficial"
-              : "Publicar Respuesta Oficial"}
-          </Button>
-        </div>
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          fullWidth
+          isLoading={isSubmitting}
+          leftIcon={<Send className="size-4" />}
+        >
+          Publicar Respuesta Oficial
+        </Button>
       </form>
-    </div>
+    </section>
   );
 }

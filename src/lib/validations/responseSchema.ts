@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 /**
- * Validation schema for official FUSCH responses (Sprint 8 - Issue 8.5).
+ * Validation schema for official JVC responses (Sprint 8 - Issue 8.5).
  * - Minimum 15 useful characters (trimmed) for substantive institutional feedback.
  * - Maximum 600 characters for conciseness.
+ * - Target status: `resolved` (default) or `in_review` for a provisional answer.
  */
 export const officialResponseSchema = z.object({
   suggestionId: z
@@ -22,6 +23,7 @@ export const officialResponseSchema = z.object({
       (val) => val.length <= 600,
       "La respuesta oficial no debe superar los 600 caracteres.",
     ),
+  status: z.enum(["in_review", "resolved"]).default("resolved"),
 });
 
-export type OfficialResponseInput = z.infer<typeof officialResponseSchema>;
+export type OfficialResponseInput = z.input<typeof officialResponseSchema>;

@@ -21,6 +21,7 @@ import {
   fetchPublicImprovements,
   fetchReferencedPhotoUrls,
   fetchResponses,
+  fetchSuggestionsForExport,
   fetchTicketDetails,
   purgeResolvedMedia,
   RateLimitExceededError,
@@ -259,6 +260,34 @@ describe("ticket tracking and moderation services", () => {
     });
   });
 
+  it("publishes a provisional response that keeps the ticket in review and off the board", async () => {
+    const provisional = await submitOfficialResponse({
+      suggestionId: ticketId,
+      responderEmail: MODERATOR,
+      responseText: "Estamos verificando el gramaje con el concesionario del turno.",
+      status: "in_review",
+    });
+    expect(provisional?.suggestion.status).toBe("in_review");
+
+    // The student already sees it when tracking the ticket...
+    const details = await fetchTicketDetails(ticketCode);
+    expect(details?.suggestion.status).toBe("in_review");
+    expect(details?.responses.map((r) => r.response_text)).toEqual([
+      "Estamos verificando el gramaje con el concesionario del turno.",
+    ]);
+    // ...but the transparency board only lists resolved cases.
+    await expect(fetchPublicImprovements()).resolves.toEqual([]);
+
+    const closed = await submitOfficialResponse({
+      suggestionId: ticketId,
+      responderEmail: MODERATOR,
+      responseText: "Se coordinó con cocina para estandarizar el gramaje del desayuno.",
+      status: "resolved",
+    });
+    expect(closed?.suggestion.status).toBe("resolved");
+    expect(closed?.response.id).toBe(provisional?.response.id);
+  });
+
   it("returns null when responding to a ticket that does not exist", async () => {
     await expect(
       submitOfficialResponse({
@@ -310,9 +339,23 @@ describe("ticket tracking and moderation services", () => {
     });
     expect(byText.totalCount).toBe(1);
 
+    const withPhoto = await fetchAdminSuggestions({ page: 1, pageSize: 15, hasPhoto: true });
+    expect(withPhoto.totalCount).toBeGreaterThanOrEqual(1);
+    expect(withPhoto.totalCount).toBeLessThan(all.totalCount);
+    expect(withPhoto.suggestions.every((s) => s.photo_url !== null)).toBe(true);
+
     // LIKE wildcards typed by a moderator are matched literally.
     await expect(fetchAdminSuggestions({ page: 1, pageSize: 15, search: "%" }))
       .resolves.toMatchObject({ totalCount: 0 });
+  });
+
+  it("exports every row matching the filters, not just one page", async () => {
+    const everything = await fetchSuggestionsForExport({});
+    const { totalCount } = await fetchAdminSuggestions({ page: 1, pageSize: 1 });
+    expect(everything).toHaveLength(totalCount);
+
+    const resolvedWithPhoto = await fetchSuggestionsForExport({ status: "resolved", hasPhoto: true });
+    expect(resolvedWithPhoto.map((s) => s.id)).toEqual([ticketId]);
   });
 
   it("computes the dashboard metrics in a single pass", async () => {
@@ -321,6 +364,13 @@ describe("ticket tracking and moderation services", () => {
     expect(metrics.resolved).toBe(1);
     expect(metrics.weeklyIncrement).toBe(metrics.total);
     expect(metrics.resolutionRate).toBe(Math.round((1 / metrics.total) * 100));
+    // Every fixture row is from this week, so both rates coincide.
+    expect(metrics.weeklyResolutionRate).toBe(metrics.resolutionRate);
+
+    const { rows } = await db.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM public.suggestions WHERE status = 'pending' AND category = 'hygiene'",
+    );
+    expect(metrics.pendingHygiene).toBe(rows[0].n);
   });
 
   it("detaches photos only from resolved tickets older than the threshold", async () => {

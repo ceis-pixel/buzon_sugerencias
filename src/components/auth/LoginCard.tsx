@@ -68,13 +68,13 @@ export function LoginCard({ redirectTo = "/", className = "" }: LoginCardProps) 
     <Card className={`w-full max-w-md ${className}`}>
       <CardHeader className="flex flex-col items-center space-y-2 text-center pb-3">
         <Badge variant="secondary" icon={<Sparkles />}>
-          Comedor Universitario · FUSCH
+          Comedor Universitario · JVC
         </Badge>
         <CardTitle as="h2" className="text-2xl font-bold text-gray-900">
           Acceso al Buzón
         </CardTitle>
         <CardDescription className="text-sm leading-6">
-          Comedor Universitario UNSCH — FUSCH
+          Comedor Universitario UNSCH — Junta de Vigilancia (JVC)
         </CardDescription>
       </CardHeader>
 

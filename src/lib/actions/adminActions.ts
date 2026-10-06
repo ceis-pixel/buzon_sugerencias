@@ -5,8 +5,11 @@ import { z } from "zod";
 
 import { getVerifiedAdmin } from "@/lib/auth/session";
 import {
+  fetchResponses,
+  fetchSuggestionsForExport,
   submitOfficialResponse,
   updateSuggestionStatusById,
+  type AdminSuggestionCriteria,
 } from "@/lib/services/suggestionService";
 import {
   officialResponseSchema,
@@ -28,6 +31,66 @@ const UNAUTHORIZED_MESSAGE =
   "Acceso no autorizado. Se requieren credenciales de moderador activo.";
 
 const suggestionIdSchema = z.uuid();
+
+const exportCriteriaSchema = z.object({
+  shift: z.enum(["all", "breakfast", "lunch", "dinner"]).default("all"),
+  category: z
+    .enum(["all", "menu", "hygiene", "portion", "service", "infrastructure"])
+    .default("all"),
+  status: z.enum(["all", "pending", "in_review", "resolved"]).default("all"),
+  search: z.string().max(200).default(""),
+  hasPhoto: z.boolean().default(false),
+});
+
+export interface ExportedSuggestion extends SuggestionRow {
+  latest_response: TicketResponseRow | null;
+}
+
+/**
+ * Server Action: returns every suggestion matching the inbox filters, with its
+ * public response, so the browser can build the Excel or CSV report.
+ * Restricted to active administrators.
+ */
+export async function fetchSuggestionsReport(
+  criteria: AdminSuggestionCriteria,
+): Promise<AdminActionResponse<ExportedSuggestion[]>> {
+  const parsed = exportCriteriaSchema.safeParse(criteria);
+  if (!parsed.success) {
+    return { success: false, data: null, error: "Los filtros del reporte no son válidos." };
+  }
+
+  try {
+    const admin = await getVerifiedAdmin();
+    if (!admin) {
+      return { success: false, data: null, error: UNAUTHORIZED_MESSAGE };
+    }
+
+    const suggestions = await fetchSuggestionsForExport(parsed.data);
+    const responses = await fetchResponses(suggestions.map((item) => item.id));
+
+    // Responses arrive oldest first, so the last public one per ticket wins.
+    const latestBySuggestion = new Map<string, TicketResponseRow>();
+    for (const response of responses) {
+      if (!response.is_internal) latestBySuggestion.set(response.suggestion_id, response);
+    }
+
+    return {
+      success: true,
+      data: suggestions.map((item) => ({
+        ...item,
+        latest_response: latestBySuggestion.get(item.id) ?? null,
+      })),
+      error: null,
+    };
+  } catch (err) {
+    console.error("[fetchSuggestionsReport] Unexpected exception:", (err as Error).message);
+    return {
+      success: false,
+      data: null,
+      error: "Ocurrió un error inesperado al preparar el reporte.",
+    };
+  }
+}
 
 /**
  * Server Action: Updates a suggestion status (pending | in_review | resolved).
@@ -65,6 +128,7 @@ export async function updateSuggestionStatus(
 
     revalidatePath("/admin");
     revalidatePath("/seguimiento");
+    revalidatePath("/transparencia");
 
     return { success: true, data: updated, error: null };
   } catch (err) {
@@ -78,8 +142,8 @@ export async function updateSuggestionStatus(
 }
 
 /**
- * Server Action: Submits or updates an official response from FUSCH.
- * Automatically marks the suggestion as `resolved`.
+ * Server Action: Submits or updates an official response from the JVC and moves
+ * the suggestion to the chosen status (`resolved` unless `in_review` is requested).
  */
 export async function saveOfficialResponse(
   input: OfficialResponseInput,
@@ -112,6 +176,7 @@ export async function saveOfficialResponse(
           suggestionId: validation.data.suggestionId,
           responderEmail: admin.userEmail,
           responseText: validation.data.responseText,
+          status: validation.data.status,
         })
       : null;
 
@@ -125,6 +190,7 @@ export async function saveOfficialResponse(
 
     revalidatePath("/admin");
     revalidatePath("/seguimiento");
+    revalidatePath("/transparencia");
 
     return { success: true, data: saved, error: null };
   } catch (err) {

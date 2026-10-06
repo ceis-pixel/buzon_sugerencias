@@ -16,7 +16,7 @@ export const metadata: Metadata = {
  *
  * Public educational resource for the UNSCH university community explaining:
  * - Zero-knowledge anonymous dissociation.
- * - Role of the FUSCH Dining Hall Health and Nutrition Commission.
+ * - Role of the dining hall oversight board (JVC).
  * - Loss of ticket codes and local device history.
  * - Service hours for Breakfast, Lunch, and Dinner.
  * - Official response turnaround times.
@@ -25,7 +25,7 @@ export default function PreguntasFrecuentesPage() {
   return (
     <PageContainer
       title="Centro de Ayuda y Preguntas Frecuentes"
-      subtitle="Conoce cómo funciona el buzón de sugerencias, cómo se protege tu anonimato y qué medidas toma la comisión de comedor."
+      subtitle="Conoce cómo funciona el buzón de sugerencias, cómo se protege tu anonimato y qué medidas toma la Junta de Vigilancia del Comedor Universitario (JVC)."
       badge="Atención y Transparencia Estudiantil"
     >
       <div className="space-y-6">
@@ -56,9 +56,8 @@ export default function PreguntasFrecuentesPage() {
             ¿Tienes alguna consulta adicional no resuelta en esta sección?
           </p>
           <p>
-            Puedes acercarte presencialmente a la oficina de la Secretaría de Salud y Nutrición de la
-            FUSCH en el Pabellón Estudiantil o emitir una sugerencia en la categoría &ldquo;Trato y
-            Atención&rdquo;.
+            Puedes dirigirte a la Junta de Vigilancia del Comedor Universitario (JVC) o enviar una
+            sugerencia en la categoría &ldquo;Atención&rdquo;.
           </p>
         </div>
       </div>

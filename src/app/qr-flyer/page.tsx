@@ -192,7 +192,7 @@ export default function QrFlyerPage() {
             {/* Backing Seals Row */}
             <div className="flex items-center justify-center gap-2 flex-wrap pt-1">
               <Badge variant="secondary" size={isA4 ? "md" : "sm"}>
-                FUSCH • Secretaría de Salud y Nutrición
+                Junta de Vigilancia del Comedor Universitario (JVC)
               </Badge>
               <Badge variant="tertiary" size={isA4 ? "md" : "sm"}>
                 CEIS UNSCH
@@ -327,7 +327,7 @@ export default function QrFlyerPage() {
                     3. Guarda tu Código
                   </span>
                   <span className="block text-[10px] text-neutral-gray leading-tight mt-0.5">
-                    Consulta la respuesta y medidas correctivas de la comisión.
+                    Consulta la respuesta y medidas correctivas de la JVC.
                   </span>
                 </div>
               </div>
@@ -336,7 +336,7 @@ export default function QrFlyerPage() {
             {/* Official Backing Footer */}
             <div className="pt-2 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between text-center sm:text-left gap-1.5 text-[9px] sm:text-[10px] text-neutral-gray">
               <span className="font-semibold text-gray-800">
-                FUSCH • Secretaría de Salud y Nutrición & CEIS UNSCH
+                Junta de Vigilancia del Comedor Universitario (JVC) & CEIS UNSCH
               </span>
               <span>
                 Canal Oficial de Transparencia y Bienestar Universitario — Ayacucho

@@ -10,7 +10,7 @@ import { fetchPublicImprovements, type PublicImprovement } from "@/lib/services/
 export const metadata: Metadata = {
   title: "Mural de Transparencia Pública • Comedor UNSCH",
   description:
-    "Mural informativo público con las mejoras realizadas e incidencias atendidas por la Comisión de Comedor FUSCH y Bienestar Universitario.",
+    "Mural público con las medidas y mejoras adoptadas por la Junta de Vigilancia del Comedor Universitario (JVC) a partir de las sugerencias de los comensales.",
 };
 
 // Read from PostgreSQL on each request: the on-premise image is compiled
@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
  * /transparencia — Public Transparency Board (Issue 10.6)
  *
  * Public Server Component that showcases exclusively resolved tickets with
- * official, published responses from FUSCH.
+ * official, published responses from the JVC.
  *
  * Security and Dissociation Audit:
  * - Status must be strictly 'resolved'.
@@ -52,7 +52,7 @@ export default async function TransparenciaPage() {
   return (
     <PageContainer
       title="Mural de Transparencia de Mejoras"
-      subtitle="Resultados concretos y medidas adoptadas por la Comisión FUSCH en el Comedor Universitario."
+      subtitle="Medidas y mejoras adoptadas por la Junta de Vigilancia del Comedor Universitario (JVC)."
       badge="Cierre del Círculo de Confianza Estudiantil"
     >
       <TransparencyBoardView improvements={improvements} />

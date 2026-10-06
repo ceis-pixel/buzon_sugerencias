@@ -1,6 +1,6 @@
 import { AdminDashboardView } from "@/components/admin/AdminDashboardView";
 import type { DashboardMetrics } from "@/components/admin/DashboardMetricsCards";
-import type { SuggestionWithResponse } from "@/components/admin/SuggestionDetailModal";
+import type { SuggestionWithResponse } from "@/components/admin/InspectionDrawer";
 import type { PaginationInfo } from "@/components/admin/SuggestionsTable";
 import type { FilterState } from "@/components/admin/SuggestionsFilterBar";
 import { getVerifiedAdmin } from "@/lib/auth/session";
@@ -24,14 +24,25 @@ export interface AdminDashboardPageProps {
     category?: string;
     status?: string;
     search?: string;
+    photo?: string;
   }>;
 }
 
+const SHIFTS: readonly string[] = ["breakfast", "lunch", "dinner"];
+const CATEGORIES: readonly string[] = ["menu", "hygiene", "portion", "service", "infrastructure"];
+const STATUSES: readonly string[] = ["pending", "in_review", "resolved"];
+
+/** Accepts a query-string value only when it is one of the known options. */
+function oneOf<T extends string>(value: string | undefined, allowed: readonly string[]): T | "all" {
+  return value && allowed.includes(value) ? (value as T) : "all";
+}
+
 /**
- * /admin — Moderation and Feedback Dashboard Page (Sprint 8 & Issue 10.3)
+ * /admin — JVC inspection console (Sprint 8 & Issue 10.3)
  *
  * Server Component with Database-driven Server-Side Pagination:
- * - Reads query parameters from URL: page, pageSize (15, 30, 50), shift, category, status, search.
+ * - Reads query parameters from URL: page, pageSize (15, 30, 50), shift, category, status,
+ *   search and photo (reports with evidence only).
  * - Computes accurate global KPI metrics via lightweight PostgreSQL count queries.
  * - Queries paginated slice from PostgreSQL using range (LIMIT/OFFSET) and exact count.
  * - Correlates official responses only for the active page slice.
@@ -43,10 +54,11 @@ export default async function AdminDashboardPage(props: AdminDashboardPageProps)
   const rawPageSize = parseInt(searchParams.pageSize || "15", 10);
   const pageSize = [15, 30, 50].includes(rawPageSize) ? rawPageSize : 15;
 
-  const shift = (searchParams.shift || "all") as ShiftType | "all";
-  const category = (searchParams.category || "all") as SuggestionCategory | "all";
-  const status = (searchParams.status || "all") as TicketStatus | "all";
-  const searchQuery = (searchParams.search || "").trim();
+  const shift = oneOf<ShiftType>(searchParams.shift, SHIFTS);
+  const category = oneOf<SuggestionCategory>(searchParams.category, CATEGORIES);
+  const status = oneOf<TicketStatus>(searchParams.status, STATUSES);
+  const searchQuery = (searchParams.search || "").trim().slice(0, 200);
+  const hasPhoto = searchParams.photo === "1";
 
   // The layout renders the access screens; the page refuses to load data on its own.
   if (!(await getVerifiedAdmin())) {
@@ -56,7 +68,15 @@ export default async function AdminDashboardPage(props: AdminDashboardPageProps)
   // 1. Global operational KPI metrics and the filtered, paginated slice
   const [metrics, { suggestions: rawSuggestions, totalCount }] = await Promise.all([
     fetchDashboardMetrics() satisfies Promise<DashboardMetrics>,
-    fetchAdminSuggestions({ page, pageSize, shift, category, status, search: searchQuery }),
+    fetchAdminSuggestions({
+      page,
+      pageSize,
+      shift,
+      category,
+      status,
+      search: searchQuery,
+      hasPhoto,
+    }),
   ]);
 
   // 2. Responses only for suggestions present in the active page
@@ -75,8 +95,8 @@ export default async function AdminDashboardPage(props: AdminDashboardPageProps)
   // Build SuggestionWithResponse items for the current page
   const initialSuggestions: SuggestionWithResponse[] = rawSuggestions.map((s) => {
     const responses = responsesBySuggestion.get(s.id) || [];
-    const latest_response =
-      responses.length > 0 ? responses[responses.length - 1] : null;
+    // Internal notes are never offered as the official response to edit.
+    const latest_response = responses.findLast((response) => !response.is_internal) ?? null;
 
     return {
       ...s,
@@ -100,6 +120,7 @@ export default async function AdminDashboardPage(props: AdminDashboardPageProps)
     category,
     status,
     searchQuery,
+    hasPhoto,
   };
 
   return (

@@ -44,13 +44,13 @@ export function UnauthorizedAccessState({ userEmail }: UnauthorizedAccessStatePr
               Código 403 • Acceso Restringido
             </span>
             <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
-              Acceso restringido a la Comisión de Comedor
+              Acceso restringido a la Junta de Vigilancia
             </h1>
             <p className="text-sm leading-relaxed text-neutral-gray">
               El panel de administración y moderación está reservado exclusivamente para
-              el equipo evaluador de la{" "}
+              los miembros de la{" "}
               <strong className="text-gray-800">
-                Secretaría de Salud y Nutrición de la FUSCH
+                Junta de Vigilancia del Comedor Universitario (JVC)
               </strong>{" "}
               y los moderadores institucionales autorizados.
             </p>

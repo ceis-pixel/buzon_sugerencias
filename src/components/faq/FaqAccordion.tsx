@@ -41,9 +41,9 @@ export const FAQ_ITEMS: FaqItem[] = [
     icon: Users,
     question: "¿Quién lee y gestiona mis observaciones?",
     answer:
-      "Tus reportes son recibidos de manera directa e imparcial por la Secretaría de Salud y Nutrición de la FUSCH (Federación Universitaria de San Cristóbal de Huamanga) y los comisionados estudiantiles de comedor.",
+      "Tus reportes los recibe y fiscaliza de manera directa e imparcial la Junta de Vigilancia del Comedor Universitario (JVC), que los atiende junto con la administración del comedor.",
     details: [
-      "La comisión clasifica y evalúa las incidencias para exigir correcciones inmediatas a los concesionarios y chefs de cocina.",
+      "La JVC clasifica y evalúa las incidencias para exigir correcciones inmediatas a los concesionarios y al personal de cocina.",
       "Las observaciones críticas de inocuidad o salubridad disparan alertas de emergencia a los canales privados de fiscalización.",
       "Periódicamente se presentan informes técnicos sustentados ante la Dirección de Bienestar Universitario de la UNSCH.",
     ],
@@ -81,7 +81,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     icon: Clock,
     question: "¿En cuánto tiempo se da respuesta a los reportes?",
     answer:
-      "El equipo de moderación de la FUSCH revisa el buzón de forma continua:",
+      "Los miembros de la JVC revisan el buzón de forma continua:",
     details: [
       "Casos Críticos de Higiene o Inocuidad: Se canalizan inmediatamente para su inspección en el mismo servicio del turno.",
       "Sugerencias de Menú, Porción y Atención: Se evalúan dentro de un plazo de 24 a 72 horas hábiles.",

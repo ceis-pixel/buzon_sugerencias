@@ -6,14 +6,14 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   ExternalLink,
-  QrCode,
   Inbox,
   LogOut,
-  User,
+  QrCode,
+  ShieldCheck,
   UtensilsCrossed,
+  type LucideIcon,
 } from "lucide-react";
 
-import { Button } from "@/components/common/Button";
 import { LogoutModal } from "@/components/auth/LogoutModal";
 import type { AdminRow } from "@/types/database.types";
 
@@ -21,187 +21,148 @@ export interface AdminHeaderProps {
   admin: AdminRow;
 }
 
+const NAV_ITEMS: readonly { href: string; label: string; shortLabel: string; icon: LucideIcon }[] = [
+  { href: "/admin", label: "Bandeja de Reportes", shortLabel: "Bandeja", icon: Inbox },
+  { href: "/admin/menus", label: "Gestión de Menús", shortLabel: "Menús", icon: UtensilsCrossed },
+  { href: "/admin/analitica", label: "Analítica de Impacto", shortLabel: "Analítica", icon: BarChart3 },
+];
+
+const actionClasses =
+  "inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl border border-neutral-gray/25 px-3 text-xs font-semibold text-gray-700 transition-colors hover:bg-slate-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+
+function getInitials(admin: AdminRow): string {
+  const source = admin.full_name?.trim() || admin.email;
+  const words = source.split(/[\s.@_-]+/).filter(Boolean);
+  return (words[0]?.[0] ?? "") + (words[1]?.[0] ?? "");
+}
+
 /**
- * Issue 8.2 & 10.1 — AdminHeader (Client Component)
- *
- * Top navigation bar exclusive for FUSCH evaluators and administrators:
- * - Brand monogram with institutional badge: "Comedor UNSCH • Panel de Gestión FUSCH".
- * - Internal navigation tabs: "Bandeja" (/admin) and "Analítica de Impacto" (/admin/analitica).
- * - Identity pill with administrator name and role badge.
- * - Quick link to public portal.
- * - Secure logout action with LogoutModal.
+ * Operational top bar of the JVC console: brand, section tabs, the signed-in
+ * moderator, a shortcut to the printable QR flyer and the secure logout.
  */
 export function AdminHeader({ admin }: AdminHeaderProps) {
   const [isLogoutOpen, setIsLogoutOpen] = useState(false);
   const pathname = usePathname();
 
-  const isAnalitica = pathname.startsWith("/admin/analitica");
-  const isMenus = pathname.startsWith("/admin/menus");
-  const isInbox = pathname === "/admin";
+  const isActive = (href: string) =>
+    href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-neutral-gray/20 bg-white/95 backdrop-blur-md shadow-xs">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-          {/* Brand & Monogram */}
-          <div className="flex items-center gap-3 sm:gap-6">
-            <Link
-              href="/admin"
-              className="flex items-center gap-2.5 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
-              aria-label="Ir al panel de administración"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-xs">
-                <UtensilsCrossed className="h-5 w-5 stroke-[2.2]" />
-              </div>
-              <div className="flex flex-col">
-                <span className="font-sans text-sm font-extrabold tracking-tight text-gray-900 sm:text-base">
-                  Comedor UNSCH
-                </span>
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-                  Panel de Gestión FUSCH
-                </span>
-              </div>
-            </Link>
+      <header className="sticky top-0 z-40 border-b border-neutral-gray/20 bg-white/95 backdrop-blur-md print:hidden">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
+          <Link
+            href="/admin"
+            aria-label="Consola de fiscalización de la JVC, ir a la bandeja"
+            className="flex min-w-0 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white">
+              <ShieldCheck aria-hidden="true" className="size-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-extrabold tracking-tight text-gray-900">
+                Comedor UNSCH
+              </span>
+              <span className="block truncate text-[11px] font-semibold text-primary">
+                Junta de Vigilancia (JVC)
+              </span>
+            </span>
+          </Link>
 
-            {/* Admin Nav Tabs */}
-            <nav
-              aria-label="Navegación del panel"
-              className="hidden sm:flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-neutral-gray/15"
-            >
-              <Link
-                href="/admin"
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  isInbox
-                    ? "bg-white text-primary shadow-xs"
-                    : "text-neutral-gray hover:text-gray-900 hover:bg-slate-200/50"
-                }`}
-              >
-                <Inbox className="h-3.5 w-3.5" />
-                <span>Bandeja</span>
-              </Link>
-              <Link
-                href="/admin/menus"
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  isMenus
-                    ? "bg-white text-primary shadow-xs"
-                    : "text-neutral-gray hover:text-gray-900 hover:bg-slate-200/50"
-                }`}
-              >
-                <UtensilsCrossed className="h-3.5 w-3.5" />
-                <span>Gestión de Menús</span>
-              </Link>
-              <Link
-                href="/admin/analitica"
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  isAnalitica
-                    ? "bg-white text-primary shadow-xs"
-                    : "text-neutral-gray hover:text-gray-900 hover:bg-slate-200/50"
-                }`}
-              >
-                <BarChart3 className="h-3.5 w-3.5" />
-                <span>Analítica de Impacto</span>
-              </Link>
-            </nav>
-          </div>
-
-          {/* User profile & controls */}
-          <div className="flex items-center gap-2 sm:gap-4">
-            {/* Mobile Tab Toggle */}
-            <div className="sm:hidden flex items-center gap-1">
-              <Link
-                href="/admin"
-                className={`p-2 rounded-xl text-xs font-semibold ${
-                  isInbox ? "bg-primary/10 text-primary" : "text-neutral-gray"
-                }`}
-                title="Bandeja de moderación"
-              >
-                <Inbox className="h-4 w-4" />
-              </Link>
-              <Link
-                href="/admin/menus"
-                className={`p-2 rounded-xl text-xs font-semibold ${
-                  isMenus ? "bg-primary/10 text-primary" : "text-neutral-gray"
-                }`}
-                title="Gestión de menús diarios"
-              >
-                <UtensilsCrossed className="h-4 w-4" />
-              </Link>
-              <Link
-                href="/admin/analitica"
-                className={`p-2 rounded-xl text-xs font-semibold ${
-                  isAnalitica ? "bg-primary/10 text-primary" : "text-neutral-gray"
-                }`}
-                title="Analítica de impacto"
-              >
-                <BarChart3 className="h-4 w-4" />
-              </Link>
-            </div>
-
-            {/* Printable QR flyer for the dining hall tables */}
+          <div className="flex shrink-0 items-center gap-2">
             <Link
               href="/qr-flyer"
               target="_blank"
               rel="noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-neutral-gray/25 px-3 py-1.5 text-xs font-semibold text-neutral-gray transition-colors hover:bg-slate-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Imprimir afiche QR"
               title="Abrir el afiche con código QR para imprimir"
+              className={actionClasses}
             >
-              <QrCode className="h-3.5 w-3.5" />
-              <span>Afiche QR</span>
+              <QrCode aria-hidden="true" className="size-4" />
+              <span className="hidden md:inline">Afiche QR</span>
             </Link>
 
-            {/* Link to public portal */}
             <Link
               href="/"
               target="_blank"
               rel="noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-neutral-gray/25 px-3 py-1.5 text-xs font-semibold text-neutral-gray transition-colors hover:bg-slate-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              title="Abrir vista pública del buzón en nueva pestaña"
+              aria-label="Abrir el portal público"
+              title="Abrir la vista pública del buzón en una pestaña nueva"
+              className={`${actionClasses} hidden lg:inline-flex`}
             >
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink aria-hidden="true" className="size-4" />
               <span>Portal Público</span>
             </Link>
 
-            {/* Moderator Identity Pill */}
-            <div className="flex items-center gap-2.5 rounded-xl border border-neutral-gray/20 bg-slate-50/80 px-3 py-1.5 text-left">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <User className="h-4 w-4 stroke-[2.2]" />
-              </div>
-              <div className="hidden md:flex flex-col">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-gray-900 leading-tight">
-                    {admin.full_name || "Moderador FUSCH"}
+            <div
+              className="flex items-center gap-2 rounded-xl border border-neutral-gray/20 bg-slate-50 py-1 pl-1 pr-1 sm:pr-3"
+              title={`${admin.full_name || "Moderador JVC"} · ${admin.email}`}
+            >
+              <span
+                aria-hidden="true"
+                className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-extrabold uppercase text-white"
+              >
+                {getInitials(admin)}
+              </span>
+              <span className="hidden min-w-0 flex-col sm:flex">
+                <span className="flex items-center gap-1.5">
+                  <span className="max-w-[11rem] truncate text-xs font-bold leading-tight text-gray-900">
+                    {admin.full_name || "Moderador JVC"}
                   </span>
-                  <span className="rounded bg-primary/15 px-1.5 py-0.2 text-[10px] font-extrabold text-primary uppercase">
+                  <span className="rounded bg-primary/15 px-1.5 text-[10px] font-extrabold uppercase text-primary">
                     {admin.role === "admin" ? "Admin" : "Moderador"}
                   </span>
-                </div>
-                <span className="text-[11px] text-neutral-gray truncate max-w-[180px]">
+                </span>
+                <span className="max-w-[14rem] truncate text-[11px] text-neutral-gray">
                   {admin.email}
                 </span>
-              </div>
+              </span>
+              <span className="sr-only sm:hidden">
+                Sesión de {admin.full_name || "moderador JVC"}, {admin.email}
+              </span>
             </div>
 
-            {/* Logout button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsLogoutOpen(false || true)}
-              leftIcon={<LogOut className="h-4 w-4" />}
-              className="text-neutral-gray hover:text-primary hover:bg-primary/5"
+            <button
+              type="button"
+              onClick={() => setIsLogoutOpen(true)}
               aria-label="Cerrar sesión institucional"
+              title="Cerrar sesión"
+              className={`${actionClasses} hover:border-primary/40 hover:bg-primary/5 hover:text-primary`}
             >
-              <span className="hidden sm:inline">Cerrar Sesión</span>
-            </Button>
+              <LogOut aria-hidden="true" className="size-4" />
+              <span className="hidden md:inline">Salir</span>
+            </button>
           </div>
         </div>
+
+        <nav
+          aria-label="Secciones del panel"
+          className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 sm:px-6 lg:px-8"
+        >
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={`inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 sm:flex-none ${
+                  active
+                    ? "border-primary text-primary"
+                    : "border-transparent text-neutral-gray hover:border-neutral-gray/30 hover:text-gray-900"
+                }`}
+              >
+                <Icon aria-hidden="true" className="size-4" />
+                <span className="sm:hidden">{item.shortLabel}</span>
+                <span className="hidden sm:inline">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
       </header>
 
-      {/* Secure Logout Modal */}
-      <LogoutModal
-        isOpen={isLogoutOpen}
-        onClose={() => setIsLogoutOpen(false)}
-      />
+      <LogoutModal isOpen={isLogoutOpen} onClose={() => setIsLogoutOpen(false)} />
     </>
   );
 }

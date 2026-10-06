@@ -5,6 +5,7 @@ import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import { OfflineBanner } from "@/components/common/OfflineBanner";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { PublicChrome } from "@/components/layout/PublicChrome";
 import { manrope } from "@/lib/fonts";
 
 import "./globals.css";
@@ -53,7 +54,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
           >
             Saltar al contenido
           </a>
-          <Header />
+          <PublicChrome>
+            <Header />
+          </PublicChrome>
           <main
             id="main-content"
             tabIndex={-1}
@@ -61,7 +64,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
           >
             {children}
           </main>
-          <Footer />
+          <PublicChrome>
+            <Footer />
+          </PublicChrome>
         </AuthSessionProvider>
       </body>
     </html>

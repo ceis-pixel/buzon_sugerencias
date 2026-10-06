@@ -3,6 +3,7 @@ import "server-only";
 import { generateRateHash, getLimaDate } from "@/lib/auth/rateHash";
 import { query, withTransaction } from "@/lib/db";
 import { sanitizeUserText } from "@/lib/security/sanitization";
+import { EXPORT_ROW_LIMIT } from "@/lib/utils/adminExport";
 import type {
   ShiftType,
   SubmittedTicketResult,
@@ -125,6 +126,10 @@ export interface DashboardMetrics {
   resolved: number;
   weeklyIncrement: number;
   resolutionRate: number;
+  /** Share of the reports received in the last 7 days that are already resolved. */
+  weeklyResolutionRate: number;
+  /** Hygiene reports nobody has reviewed yet; drives the critical highlight. */
+  pendingHygiene: number;
 }
 
 /** Global moderation KPIs computed in one pass over the table. */
@@ -135,35 +140,49 @@ export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
     in_review: number;
     resolved: number;
     weekly: number;
+    weekly_resolved: number;
+    pending_hygiene: number;
   }>(
     `SELECT count(*)::int AS total,
             count(*) FILTER (WHERE status = 'pending')::int AS pending,
             count(*) FILTER (WHERE status = 'in_review')::int AS in_review,
             count(*) FILTER (WHERE status = 'resolved')::int AS resolved,
-            count(*) FILTER (WHERE created_at >= now() - interval '7 days')::int AS weekly
+            count(*) FILTER (WHERE created_at >= now() - interval '7 days')::int AS weekly,
+            count(*) FILTER (WHERE created_at >= now() - interval '7 days'
+                               AND status = 'resolved')::int AS weekly_resolved,
+            count(*) FILTER (WHERE status = 'pending' AND category = 'hygiene')::int AS pending_hygiene
        FROM public.suggestions`,
   );
 
   const total = row?.total ?? 0;
   const resolved = row?.resolved ?? 0;
+  const weekly = row?.weekly ?? 0;
 
   return {
     total,
     pending: row?.pending ?? 0,
     inReview: row?.in_review ?? 0,
     resolved,
-    weeklyIncrement: row?.weekly ?? 0,
+    weeklyIncrement: weekly,
     resolutionRate: total > 0 ? Math.round((resolved / total) * 100) : 0,
+    weeklyResolutionRate:
+      weekly > 0 ? Math.round(((row?.weekly_resolved ?? 0) / weekly) * 100) : 0,
+    pendingHygiene: row?.pending_hygiene ?? 0,
   };
 }
 
-export interface AdminSuggestionFilters {
-  page: number;
-  pageSize: number;
+export interface AdminSuggestionCriteria {
   shift?: ShiftType | "all";
   category?: SuggestionCategory | "all";
   status?: TicketStatus | "all";
   search?: string;
+  /** Only reports that carry photographic evidence. */
+  hasPhoto?: boolean;
+}
+
+export interface AdminSuggestionFilters extends AdminSuggestionCriteria {
+  page: number;
+  pageSize: number;
 }
 
 export interface AdminSuggestionPage {
@@ -175,6 +194,36 @@ function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
+function buildAdminWhere(criteria: AdminSuggestionCriteria): { where: string; params: unknown[] } {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  const bind = (value: unknown) => `$${params.push(value)}`;
+
+  if (criteria.shift && criteria.shift !== "all") {
+    conditions.push(`shift = ${bind(criteria.shift)}`);
+  }
+  if (criteria.category && criteria.category !== "all") {
+    conditions.push(`category = ${bind(criteria.category)}`);
+  }
+  if (criteria.status && criteria.status !== "all") {
+    conditions.push(`status = ${bind(criteria.status)}`);
+  }
+  if (criteria.hasPhoto) {
+    conditions.push("photo_url IS NOT NULL");
+  }
+
+  const search = criteria.search?.trim() ?? "";
+  if (search) {
+    const column = search.toUpperCase().startsWith("UNSCH-") ? "ticket_code" : "message";
+    conditions.push(`${column} ILIKE ${bind(`%${escapeLikePattern(search)}%`)}`);
+  }
+
+  return {
+    where: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "",
+    params,
+  };
+}
+
 /**
  * Moderation inbox: filtered, newest first, paginated with LIMIT/OFFSET.
  * Callers must have authorized the request as an active administrator.
@@ -182,27 +231,7 @@ function escapeLikePattern(value: string): string {
 export async function fetchAdminSuggestions(
   filters: AdminSuggestionFilters,
 ): Promise<AdminSuggestionPage> {
-  const conditions: string[] = [];
-  const params: unknown[] = [];
-  const bind = (value: unknown) => `$${params.push(value)}`;
-
-  if (filters.shift && filters.shift !== "all") {
-    conditions.push(`shift = ${bind(filters.shift)}`);
-  }
-  if (filters.category && filters.category !== "all") {
-    conditions.push(`category = ${bind(filters.category)}`);
-  }
-  if (filters.status && filters.status !== "all") {
-    conditions.push(`status = ${bind(filters.status)}`);
-  }
-
-  const search = filters.search?.trim() ?? "";
-  if (search) {
-    const column = search.toUpperCase().startsWith("UNSCH-") ? "ticket_code" : "message";
-    conditions.push(`${column} ILIKE ${bind(`%${escapeLikePattern(search)}%`)}`);
-  }
-
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const { where, params } = buildAdminWhere(filters);
   const pageSize = Math.min(Math.max(1, Math.floor(filters.pageSize)), 100);
   const offset = (Math.max(1, Math.floor(filters.page)) - 1) * pageSize;
 
@@ -222,6 +251,24 @@ export async function fetchAdminSuggestions(
   ]);
 
   return { suggestions, totalCount: countRows[0]?.total ?? 0 };
+}
+
+/**
+ * Every suggestion matching the inbox filters, newest first, for report exports.
+ * Callers must have authorized the request as an active administrator.
+ */
+export async function fetchSuggestionsForExport(
+  criteria: AdminSuggestionCriteria,
+): Promise<SuggestionRow[]> {
+  const { where, params } = buildAdminWhere(criteria);
+  return query<SuggestionRow>(
+    `SELECT ${SUGGESTION_COLUMNS}
+       FROM public.suggestions
+       ${where}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${EXPORT_ROW_LIMIT}`,
+    params,
+  );
 }
 
 /** Every suggestion, newest first (analytics dashboard). */
@@ -301,13 +348,15 @@ export interface OfficialResponseResult {
 }
 
 /**
- * Publishes (or edits) the official response and marks the ticket as resolved,
- * atomically. Returns null when the ticket does not exist.
+ * Publishes (or edits) the official response and moves the ticket to the given
+ * status (resolved unless stated), atomically. Returns null when the ticket
+ * does not exist.
  */
 export async function submitOfficialResponse(input: {
   suggestionId: string;
   responderEmail: string;
   responseText: string;
+  status?: Extract<TicketStatus, "in_review" | "resolved">;
 }): Promise<OfficialResponseResult | null> {
   return withTransaction(async (tx) => {
     const locked = await tx.query<{ id: string }>(
@@ -343,9 +392,9 @@ export async function submitOfficialResponse(input: {
         );
 
     const [suggestion] = await tx.query<SuggestionRow>(
-      `UPDATE public.suggestions SET status = 'resolved' WHERE id = $1
+      `UPDATE public.suggestions SET status = $2 WHERE id = $1
        RETURNING ${SUGGESTION_COLUMNS}`,
-      [input.suggestionId],
+      [input.suggestionId, input.status ?? "resolved"],
     );
 
     return { response, suggestion };

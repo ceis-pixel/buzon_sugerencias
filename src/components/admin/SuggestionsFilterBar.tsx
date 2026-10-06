@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  FileSpreadsheet,
-  RefreshCw,
-  Search,
-  X,
-} from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { AlertTriangle, Image as ImageIcon, RotateCcw, Search, X } from "lucide-react";
 
-import { Button } from "@/components/common/Button";
-import { CATEGORY_OPTIONS } from "@/components/suggestion/CategorySelector";
+import {
+  CATEGORY_DISPLAY,
+  CATEGORY_FILTER_ORDER,
+} from "@/components/admin/inboxLabels";
 import { SHIFT_OPTIONS } from "@/components/suggestion/ShiftSelector";
 import type {
   ShiftType,
@@ -22,51 +19,97 @@ export interface FilterState {
   category: SuggestionCategory | "all";
   status: TicketStatus | "all";
   searchQuery: string;
+  hasPhoto: boolean;
 }
+
+export const EMPTY_FILTERS: FilterState = {
+  shift: "all",
+  category: "all",
+  status: "all",
+  searchQuery: "",
+  hasPhoto: false,
+};
 
 export interface SuggestionsFilterBarProps {
   filters: FilterState;
   onFilterChange: (filters: FilterState) => void;
-  onExportExcel: () => void;
-  onExportCsv?: () => void;
   totalFilteredCount: number;
   totalCount: number;
+  /** Unreviewed hygiene reports; highlights the hygiene chip when above zero. */
+  pendingHygiene: number;
+}
+
+const SEARCH_DEBOUNCE_MS = 300;
+
+function FilterChip({
+  isActive,
+  onClick,
+  children,
+  activeClasses = "border-primary bg-primary text-white",
+  idleClasses = "border-neutral-gray/25 bg-white text-gray-700 hover:bg-slate-50",
+}: {
+  isActive: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  activeClasses?: string;
+  idleClasses?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={isActive}
+      onClick={onClick}
+      className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+        isActive ? activeClasses : idleClasses
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ChipGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div role="group" aria-label={`Filtrar por ${label.toLowerCase()}`} className="flex items-center gap-2">
+      <span className="w-16 shrink-0 text-[11px] font-bold uppercase tracking-wider text-neutral-gray">
+        {label}
+      </span>
+      {/* Chips scroll sideways on narrow screens instead of wrapping into tall blocks. */}
+      <div className="-mx-1 flex min-w-0 flex-1 gap-1.5 overflow-x-auto px-1 py-1 sm:flex-wrap sm:overflow-visible">
+        {children}
+      </div>
+    </div>
+  );
 }
 
 /**
- * Issue 8.3 & 10.3 — SuggestionsFilterBar
- *
- * Multi-dimensional filter bar for administrative moderation:
- * - Search by ticket code or keyword with 300 ms debounce.
- * - Shift selector (Todos, Desayuno, Almuerzo, Cena).
- * - Category selector (Todas, Menú, Higiene, Porción, Atención, Infraestructura).
- * - Status selector (Todos, Pendientes, En revisión, Atendidos).
- * - Integrated client-side Excel export trigger (Issue 8.6).
+ * Control toolbar of the inspection inbox:
+ * - Search by ticket code (UNSCH-XXXX) or free text, debounced.
+ * - One-tap chips for shift, category and status.
+ * - Toggle for reports that carry photographic evidence.
  */
 export function SuggestionsFilterBar({
   filters,
   onFilterChange,
-  onExportExcel,
   totalFilteredCount,
   totalCount,
+  pendingHygiene,
 }: SuggestionsFilterBarProps) {
-  // Local search query for 300 ms debounced input
   const [searchTerm, setSearchTerm] = useState(filters.searchQuery);
   const [prevSearchQuery, setPrevSearchQuery] = useState(filters.searchQuery);
 
-  // Sync internal state if external filter state changes without triggering effect warning
+  // Follow external changes (reset, back/forward navigation) without an effect.
   if (filters.searchQuery !== prevSearchQuery) {
     setPrevSearchQuery(filters.searchQuery);
     setSearchTerm(filters.searchQuery);
   }
 
-  // Debounce search update (300 ms)
   useEffect(() => {
     const handler = setTimeout(() => {
       if (searchTerm !== filters.searchQuery) {
         onFilterChange({ ...filters, searchQuery: searchTerm });
       }
-    }, 300);
+    }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(handler);
   }, [searchTerm, filters, onFilterChange]);
@@ -75,180 +118,186 @@ export function SuggestionsFilterBar({
     filters.shift !== "all" ||
     filters.category !== "all" ||
     filters.status !== "all" ||
+    filters.hasPhoto ||
     searchTerm.trim() !== "";
 
-  const handleResetFilters = () => {
+  const handleReset = () => {
     setSearchTerm("");
-    onFilterChange({
-      shift: "all",
-      category: "all",
-      status: "all",
-      searchQuery: "",
-    });
+    onFilterChange(EMPTY_FILTERS);
   };
 
-  const handleClearSearch = () => {
-    setSearchTerm("");
-    onFilterChange({ ...filters, searchQuery: "" });
-  };
+  const isHygieneCritical = pendingHygiene > 0;
 
   return (
-    <div className="rounded-2xl border border-neutral-gray/20 bg-white p-4 shadow-sm space-y-4">
-      {/* Top row: Search input + Actions */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/* Search Input with Debounce */}
+    <section
+      aria-label="Búsqueda y filtros"
+      className="space-y-3 rounded-2xl border border-neutral-gray/20 bg-white p-3 shadow-sm sm:p-4"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-gray">
-            <Search className="h-4 w-4" />
-          </div>
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-gray"
+          />
           <input
-            type="text"
+            type="search"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
+            onChange={(event) => setSearchTerm(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
                 onFilterChange({ ...filters, searchQuery: searchTerm });
               }
             }}
-            placeholder="Buscar por código (ej. UNSCH-7K4M) o texto…"
-            className="block w-full rounded-xl border border-neutral-gray/30 bg-slate-50/50 py-2.5 pl-9 pr-8 text-sm text-gray-900 placeholder:text-neutral-gray shadow-xs focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+            aria-label="Buscar por código de ticket o por texto"
+            placeholder="Buscar código (UNSCH-7K4M) o texto del reporte"
+            className="block min-h-11 w-full rounded-xl border border-neutral-gray/30 bg-slate-50/60 pl-9 pr-10 text-sm text-gray-900 placeholder:text-neutral-gray focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 [&::-webkit-search-cancel-button]:appearance-none"
           />
           {searchTerm && (
             <button
               type="button"
-              onClick={handleClearSearch}
-              className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-neutral-gray hover:text-gray-900"
+              onClick={() => {
+                setSearchTerm("");
+                onFilterChange({ ...filters, searchQuery: "" });
+              }}
               aria-label="Limpiar búsqueda"
+              className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-neutral-gray hover:text-gray-900"
             >
-              <X className="h-4 w-4" />
+              <X aria-hidden="true" className="size-4" />
             </button>
           )}
         </div>
 
-        {/* Export and Reset Buttons */}
-        <div className="flex items-center gap-2">
-          {isFiltered && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleResetFilters}
-              leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
-              className="text-xs text-neutral-gray hover:text-primary"
+        <button
+          type="button"
+          role="switch"
+          aria-checked={filters.hasPhoto}
+          onClick={() => onFilterChange({ ...filters, hasPhoto: !filters.hasPhoto })}
+          className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+            filters.hasPhoto
+              ? "border-primary bg-primary/5 text-primary"
+              : "border-neutral-gray/30 bg-white text-gray-700 hover:bg-slate-50"
+          }`}
+        >
+          <ImageIcon aria-hidden="true" className="size-4" />
+          Solo con evidencia fotográfica
+          <span
+            aria-hidden="true"
+            className={`relative ml-1 h-5 w-9 rounded-full transition-colors ${
+              filters.hasPhoto ? "bg-primary" : "bg-neutral-gray/30"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-all ${
+                filters.hasPhoto ? "left-[1.125rem]" : "left-0.5"
+              }`}
+            />
+          </span>
+        </button>
+      </div>
+
+      <div className="space-y-1 border-t border-neutral-gray/15 pt-2">
+        <ChipGroup label="Turno">
+          <FilterChip
+            isActive={filters.shift === "all"}
+            onClick={() => onFilterChange({ ...filters, shift: "all" })}
+          >
+            Todos
+          </FilterChip>
+          {SHIFT_OPTIONS.map((option) => (
+            <FilterChip
+              key={option.id}
+              isActive={filters.shift === option.id}
+              onClick={() => onFilterChange({ ...filters, shift: option.id })}
             >
-              Restablecer
-            </Button>
-          )}
+              {option.label}
+            </FilterChip>
+          ))}
+        </ChipGroup>
 
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onExportExcel}
-            leftIcon={<FileSpreadsheet className="h-4 w-4" />}
-            className="text-xs"
-            title="Exportar registros filtrados a formato Microsoft Excel (.xlsx)"
+        <ChipGroup label="Categoría">
+          <FilterChip
+            isActive={filters.category === "all"}
+            onClick={() => onFilterChange({ ...filters, category: "all" })}
           >
-            Exportar Excel
-          </Button>
-        </div>
+            Todas
+          </FilterChip>
+          {CATEGORY_FILTER_ORDER.map((category) => {
+            const isCritical = category === "hygiene" && isHygieneCritical;
+            return (
+              <FilterChip
+                key={category}
+                isActive={filters.category === category}
+                onClick={() => onFilterChange({ ...filters, category })}
+                idleClasses={
+                  isCritical
+                    ? "border-primary/50 bg-primary/5 text-primary hover:bg-primary/10"
+                    : undefined
+                }
+              >
+                {isCritical && <AlertTriangle aria-hidden="true" className="size-3.5" />}
+                {CATEGORY_DISPLAY[category].label}
+                {isCritical && (
+                  <span
+                    className={`rounded-full px-1.5 text-[10px] font-bold ${
+                      filters.category === category ? "bg-white text-primary" : "bg-primary text-white"
+                    }`}
+                  >
+                    {pendingHygiene}
+                    <span className="sr-only"> pendientes de higiene</span>
+                  </span>
+                )}
+              </FilterChip>
+            );
+          })}
+        </ChipGroup>
+
+        <ChipGroup label="Estado">
+          <FilterChip
+            isActive={filters.status === "all"}
+            onClick={() => onFilterChange({ ...filters, status: "all" })}
+          >
+            Todos
+          </FilterChip>
+          <FilterChip
+            isActive={filters.status === "pending"}
+            onClick={() => onFilterChange({ ...filters, status: "pending" })}
+            activeClasses="border-amber-500 bg-amber-100 text-amber-900"
+          >
+            Pendientes
+          </FilterChip>
+          <FilterChip
+            isActive={filters.status === "in_review"}
+            onClick={() => onFilterChange({ ...filters, status: "in_review" })}
+            activeClasses="border-tertiary bg-tertiary text-white"
+          >
+            En Revisión
+          </FilterChip>
+          <FilterChip
+            isActive={filters.status === "resolved"}
+            onClick={() => onFilterChange({ ...filters, status: "resolved" })}
+            activeClasses="border-emerald-600 bg-emerald-600 text-white"
+          >
+            Atendidos
+          </FilterChip>
+        </ChipGroup>
       </div>
 
-      {/* Filter Selectors Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-neutral-gray/15 pt-3">
-        {/* Filter: Shift */}
-        <div className="space-y-1">
-          <label
-            htmlFor="filter-shift-select"
-            className="block text-xs font-semibold text-gray-700"
-          >
-            Turno de Comedor:
-          </label>
-          <select
-            id="filter-shift-select"
-            value={filters.shift}
-            onChange={(e) =>
-              onFilterChange({
-                ...filters,
-                shift: e.target.value as ShiftType | "all",
-              })
-            }
-            className="block w-full rounded-xl border border-neutral-gray/30 bg-white px-3 py-2 text-xs font-medium text-gray-900 shadow-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="all">Todos los turnos</option>
-            {SHIFT_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label} ({opt.schedule})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Filter: Category */}
-        <div className="space-y-1">
-          <label
-            htmlFor="filter-category-select"
-            className="block text-xs font-semibold text-gray-700"
-          >
-            Categoría:
-          </label>
-          <select
-            id="filter-category-select"
-            value={filters.category}
-            onChange={(e) =>
-              onFilterChange({
-                ...filters,
-                category: e.target.value as SuggestionCategory | "all",
-              })
-            }
-            className="block w-full rounded-xl border border-neutral-gray/30 bg-white px-3 py-2 text-xs font-medium text-gray-900 shadow-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="all">Todas las categorías</option>
-            {CATEGORY_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Filter: Status */}
-        <div className="space-y-1">
-          <label
-            htmlFor="filter-status-select"
-            className="block text-xs font-semibold text-gray-700"
-          >
-            Estado del Ticket:
-          </label>
-          <select
-            id="filter-status-select"
-            value={filters.status}
-            onChange={(e) =>
-              onFilterChange({
-                ...filters,
-                status: e.target.value as TicketStatus | "all",
-              })
-            }
-            className="block w-full rounded-xl border border-neutral-gray/30 bg-white px-3 py-2 text-xs font-medium text-gray-900 shadow-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="all">Todos los estados</option>
-            <option value="pending">Pendientes</option>
-            <option value="in_review">En revisión</option>
-            <option value="resolved">Atendidos</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Filter result feedback summary */}
-      <div className="flex items-center justify-between text-xs text-neutral-gray pt-1">
-        <span>
-          Mostrando <strong>{totalFilteredCount}</strong> de{" "}
-          <strong>{totalCount}</strong> sugerencias
+      <div className="flex min-h-9 items-center justify-between gap-3 text-xs text-neutral-gray">
+        <span aria-live="polite">
+          <strong className="text-gray-900">{totalFilteredCount}</strong>{" "}
+          {isFiltered ? `de ${totalCount} reportes coinciden` : "reportes en total"}
         </span>
         {isFiltered && (
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-            Filtros activos
-          </span>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 font-semibold text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <RotateCcw aria-hidden="true" className="size-3.5" />
+            Restablecer filtros
+          </button>
         )}
       </div>
-    </div>
+    </section>
   );
 }

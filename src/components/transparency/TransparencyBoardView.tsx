@@ -116,8 +116,8 @@ export function TransparencyBoardView({
                 La voz estudiantil transforma el comedor
               </h1>
               <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
-                Todas las mejoras concretas alcanzadas por la Secretaría de Salud y Nutrición de la
-                FUSCH y la administración universitaria a partir de las sugerencias de los comensales.
+                Medidas y mejoras adoptadas por la Junta de Vigilancia del Comedor Universitario
+                (JVC) a partir de las sugerencias de los comensales.
               </p>
             </div>
 
@@ -247,7 +247,7 @@ export function TransparencyBoardView({
                 <div className="rounded-xl border border-emerald-200/90 bg-emerald-50/70 p-3.5 space-y-1.5">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>Medida de Solución Adoptada por la Comisión:</span>
+                    <span>Medida adoptada por la JVC:</span>
                   </div>
                   <p className="text-xs text-emerald-950 leading-relaxed font-medium">
                     {item.officialResponse}
@@ -262,7 +262,7 @@ export function TransparencyBoardView({
                   Atendido: {formatPeruvianDateTime(item.resolvedAt || item.createdAt)}
                 </span>
                 <span className="font-semibold text-primary">
-                  FUSCH • Salud y Nutrición
+                  Junta de Vigilancia (JVC)
                 </span>
               </div>
             </div>

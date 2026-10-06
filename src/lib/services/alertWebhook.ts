@@ -99,7 +99,7 @@ function buildDiscordPayload(
     embeds: [
       {
         title: `Ticket: ${payload.ticketCode}`,
-        description: `Se ha registrado una incidencia de alta prioridad en el Comedor Universitario que requiere atención inmediata de la Comisión FUSCH.`,
+        description: `Se ha registrado una incidencia de alta prioridad en el Comedor Universitario que requiere atención inmediata de la JVC.`,
         url: directUrl,
         color: 0x5c0000, // Crimson #5C0000
         fields: [
@@ -130,7 +130,7 @@ function buildDiscordPayload(
           },
         ],
         footer: {
-          text: "Sistema de Alertas FUSCH • Buzón de Sugerencias UNSCH",
+          text: "Sistema de Alertas JVC • Buzón de Sugerencias UNSCH",
         },
         timestamp: new Date().toISOString(),
       },

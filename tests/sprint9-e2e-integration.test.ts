@@ -379,9 +379,9 @@ describe("Sprint 9 Critical E2E & Production Integration Suite (Issue 9.4)", () 
 
       // Verify Crimson Heritage tokens and 403 status
       expect(html).toContain("Código 403 • Acceso Restringido");
-      expect(html).toContain("Acceso restringido a la Comisión de Comedor");
+      expect(html).toContain("Acceso restringido a la Junta de Vigilancia");
       expect(html).toContain("estudiante.noadmin@unsch.edu.pe");
-      expect(html).toContain("Secretaría de Salud y Nutrición de la FUSCH");
+      expect(html).toContain("Junta de Vigilancia del Comedor Universitario (JVC)");
       expect(html).toContain("Volver al Inicio");
       expect(html).toContain("Cambiar Cuenta");
     });

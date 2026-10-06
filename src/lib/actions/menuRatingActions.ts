@@ -168,7 +168,7 @@ export async function getDailyMenuWithStats(
 
 /**
  * Admin Action: Creates or updates a dining hall daily menu.
- * Restricted to active FUSCH / dining hall administrators.
+ * Restricted to active JVC / dining hall administrators.
  */
 export async function saveDailyMenu(
   input: DailyMenuInput,

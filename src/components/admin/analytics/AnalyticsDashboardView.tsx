@@ -21,7 +21,7 @@ import {
 import { Button } from "@/components/common/Button";
 import { getCategoryLabel } from "@/components/suggestion/CategorySelector";
 import { getShiftLabel } from "@/components/suggestion/ShiftSelector";
-import type { SuggestionWithResponse } from "@/components/admin/SuggestionDetailModal";
+import type { SuggestionWithResponse } from "@/components/admin/InspectionDrawer";
 import type {
   DailyMenuWithStats,
   ShiftType,
@@ -44,7 +44,7 @@ interface StoragePurgeResult {
 /**
  * Issue 10.1 — AnalyticsDashboardView (Client Component)
  *
- * Impact analytics and technical visualization panel for the FUSCH Dining Hall Commission:
+ * Impact analytics and technical visualization panel for the dining hall oversight board (JVC):
  * - Dynamic time-window filtering: Last 7 days, Current Month, Full Semester.
  * - Category incidence distribution (Native SVG chart and breakdown).
  * - Meal shift comparative volume (Desayuno, Almuerzo, Cena).
@@ -708,7 +708,7 @@ export function AnalyticsDashboardView({
             durante el período evaluado.
           </p>
           <p>
-            De las incidencias registradas, la Secretaría de Salud y Nutrición de la FUSCH ha alcanzado una tasa
+            De las incidencias registradas, la Junta de Vigilancia del Comedor Universitario (JVC) ha alcanzado una tasa
             de resolución del <strong>{performanceMetrics.resolutionRate}%</strong>, con{" "}
             <strong>{performanceMetrics.resolved}</strong> casos atendidos mediante respuestas oficiales
             y correcciones con el concesionario. Los casos críticos de higiene ({performanceMetrics.criticalHygiene}{" "}
@@ -717,7 +717,7 @@ export function AnalyticsDashboardView({
         </div>
 
         <div className="border-t border-neutral-gray/15 pt-3 flex flex-wrap items-center justify-between text-[11px] text-neutral-gray">
-          <span>Universidad Nacional de San Cristóbal de Huamanga • FUSCH</span>
+          <span>Universidad Nacional de San Cristóbal de Huamanga • JVC</span>
           <span>Generado automáticamente para la Dirección de Bienestar Universitario</span>
         </div>
       </div>

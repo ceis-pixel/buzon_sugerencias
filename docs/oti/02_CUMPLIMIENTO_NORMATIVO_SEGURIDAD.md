@@ -48,7 +48,7 @@ El correo verificado por Google se emplea únicamente para tres fines:
 | --- | --- | --- |
 | Comprobar que la persona pertenece a la UNSCH | Inicio de sesión (`src/lib/auth/authOptions.ts`) | No. Queda solo en la cookie de sesión cifrada del navegador |
 | Calcular el hash del cupo anti-spam | En memoria, al enviar (`src/lib/auth/rateHash.ts`) | No. Se guarda el hash, no el correo |
-| Consultar si es moderador | Búsqueda en la tabla `admins` | Solo existe para quienes la OTI o la FUSCH registran como moderadores |
+| Consultar si es moderador | Búsqueda en la tabla `admins` | Solo existe para quienes la OTI o la JVC registran como moderadores |
 
 No existe tabla de usuarios, de sesiones ni de cuentas: NextAuth opera sin
 adaptador de base de datos. Solo se solicitan a Google los permisos `openid` y
@@ -128,7 +128,7 @@ exento de la ley:
 
 | Dato | Titular | Finalidad | Conservación |
 | --- | --- | --- | --- |
-| Correo y nombre en `admins` | Moderadores de la FUSCH / comisión | Autorizar el acceso al panel | Mientras dure el encargo; se desactiva con `is_active = false` |
+| Correo y nombre en `admins` | Moderadores de la JVC | Autorizar el acceso al panel | Mientras dure el encargo; se desactiva con `is_active = false` |
 | Correo del autor en `ticket_responses` | Moderadores | Trazabilidad de las respuestas oficiales | Mientras exista el ticket. No se muestra al público |
 | Correo en la cookie de sesión | Cualquier usuario autenticado | Mantener la sesión (8 horas) | En el navegador del usuario, cifrada |
 | Direcciones IP en los registros de Nginx | Cualquier visitante | Diagnóstico y defensa perimetral | 30 MB rotativos por contenedor |
@@ -140,7 +140,7 @@ Puntos que la universidad debe evaluar con Asesoría Legal:
    Protección de Datos Personales, si corresponde.
 2. Publicación de un aviso de privacidad accesible desde el sistema.
 3. **Contenido libre:** un estudiante puede escribir nombres o adjuntar una
-   foto donde aparezcan personas. El sistema no puede impedirlo; la comisión
+   foto donde aparezcan personas. El sistema no puede impedirlo; la JVC
    debe moderar estos casos antes de publicarlos en el mural de transparencia.
 4. Google actúa como proveedor de identidad. La cuenta ya es institucional y
    se rige por el acuerdo de Google Workspace de la UNSCH.
@@ -252,7 +252,7 @@ perimetral, que es donde termina TLS (documento 03, sección 5).
 
 - **Estudiante.** Se autentica para enviar, pero su contenido se guarda sin
   identidad. Para consultar su caso no necesita sesión: basta el código.
-- **Moderador (Comisión de Comedor / FUSCH).** Cuenta `@unsch.edu.pe` que
+- **Moderador (Junta de Vigilancia del Comedor Universitario, JVC).** Cuenta `@unsch.edu.pe` que
   además figura activa en `admins`. Cada operación privilegiada vuelve a
   consultar esa tabla en el servidor; el indicador de la sesión solo se usa
   para adaptar la interfaz. Al desactivar a un moderador, pierde el acceso de

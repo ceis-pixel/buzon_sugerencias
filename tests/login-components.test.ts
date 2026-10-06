@@ -40,9 +40,9 @@ describe("Login and Authentication UI Components", () => {
     it("renders institutional badge, main title and Google institutional button", () => {
       const html = renderToStaticMarkup(createElement(LoginCard));
 
-      expect(html).toContain("Comedor Universitario · FUSCH");
+      expect(html).toContain("Comedor Universitario · JVC");
       expect(html).toContain("Acceso al Buzón");
-      expect(html).toContain("Comedor Universitario UNSCH — FUSCH");
+      expect(html).toContain("Comedor Universitario UNSCH — Junta de Vigilancia (JVC)");
       expect(html).toContain("Continuar con correo institucional (@unsch.edu.pe)");
       expect(html).toContain("Tu identidad está protegida");
     });

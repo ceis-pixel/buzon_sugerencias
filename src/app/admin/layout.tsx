@@ -7,9 +7,9 @@ import { getInstitutionalSession } from "@/lib/auth/session";
 import { findActiveAdmin } from "@/lib/services/adminService";
 
 export const metadata: Metadata = {
-  title: "Panel de Gestión y Moderación FUSCH • Comedor UNSCH",
+  title: "Consola de Fiscalización JVC • Comedor UNSCH",
   description:
-    "Módulo administrativo exclusivo para la Secretaría de Salud y Nutrición de la FUSCH. Moderación, seguimiento y atención de sugerencias del comedor universitario.",
+    "Módulo administrativo exclusivo de la Junta de Vigilancia del Comedor Universitario (JVC). Fiscalización, seguimiento y atención de sugerencias del comedor universitario.",
   robots: {
     index: false,
     follow: false,

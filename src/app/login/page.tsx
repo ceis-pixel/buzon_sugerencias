@@ -37,7 +37,7 @@ export default function LoginPage() {
     <PageContainer
       title="Acceso al Buzón"
       subtitle="Participa en la mejora continua de nuestro comedor estudiantil."
-      badge="Comedor UNSCH · FUSCH"
+      badge="Comedor UNSCH · JVC"
     >
       <Suspense
         fallback={

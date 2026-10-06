@@ -30,7 +30,7 @@ export function Footer() {
 
         <div className="pt-2 text-[11px] text-neutral-gray">
           <p className="font-medium text-gray-800">
-            FUSCH (Secretaría de Salud y Nutrición) • CEIS UNSCH
+            Junta de Vigilancia del Comedor Universitario (JVC) • CEIS UNSCH
           </p>
           <p>Universidad Nacional de San Cristóbal de Huamanga</p>
         </div>

@@ -171,7 +171,7 @@ export function AdminMenusView({ initialMenus }: AdminMenusViewProps) {
             Gestión de Menús Diarios y Calificaciones
           </h1>
           <p className="mt-1 text-sm text-neutral-gray">
-            Programación nutricional oficial de la FUSCH y control del termómetro estudiantil.
+            Programación oficial de menús a cargo de la JVC y control del termómetro estudiantil.
           </p>
         </div>
       </div>

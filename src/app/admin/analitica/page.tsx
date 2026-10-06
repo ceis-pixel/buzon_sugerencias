@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 
 import { AnalyticsDashboardView } from "@/components/admin/analytics/AnalyticsDashboardView";
-import type { SuggestionWithResponse } from "@/components/admin/SuggestionDetailModal";
+import type { SuggestionWithResponse } from "@/components/admin/InspectionDrawer";
 import { getVerifiedAdmin } from "@/lib/auth/session";
 import { fetchAllSuggestions, fetchResponses } from "@/lib/services/suggestionService";
 import type { TicketResponseRow } from "@/types/database.types";
 
 export const metadata: Metadata = {
-  title: "Analítica de Impacto y Gestión FUSCH • Comedor UNSCH",
+  title: "Analítica de Impacto JVC • Comedor UNSCH",
   description:
     "Panel visual de métricas, distribución de incidencias y tasas de resolución para fundamentar informes técnicos ante la Dirección de Bienestar Universitario.",
 };
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  * /admin/analitica — Impact Analytics Page (Issue 10.1)
  *
  * Protected Server Component that aggregates operational metrics and renders
- * the graphical visualization dashboard for the FUSCH Dining Hall Commission.
+ * the graphical visualization dashboard for the dining hall oversight board (JVC).
  */
 export default async function AdminAnaliticaPage() {
   // The layout renders the access screens; the page refuses to load data on its own.

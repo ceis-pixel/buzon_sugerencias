@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatLimaDateAndTime,
   formatPeruvianDateTime,
   getPeruvianDateStamp,
   mapSuggestionsToReportRows,
   type SuggestionWithResponse,
 } from "@/lib/utils/exportReport";
+import { CANNED_RESPONSES } from "@/components/admin/OfficialResponseEditor";
 import { officialResponseSchema } from "@/lib/validations/responseSchema";
 
 describe("Sprint 8 — Admin Security & Validation (Issue 8.5)", () => {
@@ -54,6 +56,28 @@ describe("Sprint 8 — Admin Security & Validation (Issue 8.5)", () => {
     }
   });
 
+  it("defaults the target status to resolved and accepts only in_review or resolved", () => {
+    const base = {
+      suggestionId: "0b9f7c0e-6a54-4f0e-9d53-3f2b6c1d8e11",
+      responseText: "Se realizó la inspección higiénica en cocina.",
+    };
+
+    expect(officialResponseSchema.parse(base).status).toBe("resolved");
+    expect(officialResponseSchema.parse({ ...base, status: "in_review" }).status).toBe("in_review");
+    expect(officialResponseSchema.safeParse({ ...base, status: "pending" }).success).toBe(false);
+  });
+
+  it("offers canned responses that already satisfy the response rules", () => {
+    expect(CANNED_RESPONSES).toHaveLength(3);
+    for (const canned of CANNED_RESPONSES) {
+      const parsed = officialResponseSchema.safeParse({
+        suggestionId: "0b9f7c0e-6a54-4f0e-9d53-3f2b6c1d8e11",
+        responseText: canned.text,
+      });
+      expect(parsed.success).toBe(true);
+    }
+  });
+
   it("requires a valid UUID for suggestionId", () => {
     const invalidId = {
       suggestionId: "not-a-uuid",
@@ -70,6 +94,16 @@ describe("Sprint 8 — Report Export & Date Utilities (Issue 8.6)", () => {
     const formatted = formatPeruvianDateTime(isoString);
     expect(formatted).toBeDefined();
     expect(formatted).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+  });
+
+  it("splits a timestamp into Lima date and 12-hour time", () => {
+    // 17:45 UTC is 12:45 in Lima (UTC-5, no daylight saving).
+    expect(formatLimaDateAndTime("2026-10-06T17:45:00Z")).toEqual({
+      date: "06/10/2026",
+      time: "12:45 PM",
+    });
+    expect(formatLimaDateAndTime("no es una fecha")).toEqual({ date: "", time: "" });
+    expect(formatLimaDateAndTime(null)).toEqual({ date: "", time: "" });
   });
 
   it("generates a date stamp in YYYY-MM-DD format", () => {

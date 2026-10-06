@@ -51,6 +51,33 @@ export function formatPeruvianDateTime(dateString: string | null | undefined): s
 }
 
 /**
+ * Splits an ISO timestamp into a Lima calendar date ("06/10/2026") and a
+ * 12-hour clock time ("12:45 PM"). Returns empty strings for invalid input.
+ */
+export function formatLimaDateAndTime(dateString: string | null | undefined): {
+  date: string;
+  time: string;
+} {
+  const parsed = dateString ? new Date(dateString) : null;
+  if (!parsed || isNaN(parsed.getTime())) return { date: "", time: "" };
+
+  return {
+    date: new Intl.DateTimeFormat("es-PE", {
+      timeZone: "America/Lima",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(parsed),
+    time: new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Lima",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    }).format(parsed),
+  };
+}
+
+/**
  * Returns today's date formatted as YYYY-MM-DD in America/Lima timezone.
  */
 export function getPeruvianDateStamp(): string {
