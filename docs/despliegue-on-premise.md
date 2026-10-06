@@ -161,16 +161,131 @@ Desde el panel de analítica, un moderador puede ejecutar la depuración
 - Elimina archivos huérfanos de `/app/uploads`: imágenes con más de 24 horas
   que ninguna sugerencia referencia.
 
-## Respaldos
+## Operaciones y Plan de Continuidad (Disaster Recovery & SRE OTI)
+
+La Oficina de Tecnologías de la Información (OTI UNSCH) establece los siguientes acuerdos de nivel de servicio (SLA/SLO) para el sistema:
+- **RPO (Recovery Point Objective): < 24 horas.** Ninguna pérdida de datos superará el último ciclo diario nocturno.
+- **RTO (Recovery Time Objective): < 30 minutos.** El tiempo de recuperación total tras desastre o migración debe completarse en menos de media hora mediante scripts transaccionales automatizados.
+- **Retención local:** 7 días de respaldos rotativos automatizados en disco.
+- **Auditoría y zona horaria:** Todos los registros operacionales utilizan la marca temporal de Lima (UTC-5 / `America/Lima`).
+
+---
+
+### 1. Tareas Programadas en el Servidor Linux OTI (`cron`)
+
+Para garantizar cero intervención manual y evitar saturación del disco del servidor institucional, se configuran dos rutinas en el `crontab` del usuario administrador del host:
 
 ```bash
-# Base de datos
-docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > respaldo.sql
-
-# Fotografías
-docker run --rm -v buzon-comedor-unsch_app_uploads:/data:ro -v "$PWD":/backup alpine \
-  tar czf /backup/uploads.tar.gz -C /data .
+# Editar las tareas programadas en el servidor
+crontab -e
 ```
 
-Conserva `RATE_LIMIT_HMAC_SECRET` y `NEXTAUTH_SECRET` fuera de los respaldos
-de la base de datos.
+Añade las siguientes entradas (ajustando la ruta absoluta hacia el proyecto):
+
+```cron
+# ==============================================================================
+# BUZÓN DE SUGERENCIAS COMEDOR UNSCH - TAREAS PROGRAMADAS OTI (ZONA HORARIA UTC-5)
+# ==============================================================================
+
+# 1. Respaldo Diario (Disaster Recovery): 03:00 AM todos los días
+0 3 * * * /opt/buzon_sugerencias/docker/scripts/backup/backup.sh >> /opt/buzon_sugerencias/backups/cron-backup.log 2>&1
+
+# 2. Mantenimiento Nocturno y Purga de Disco: 04:00 AM todos los días
+0 4 * * * /opt/buzon_sugerencias/docker/scripts/maintenance/nightly-cleanup.sh >> /opt/buzon_sugerencias/logs/cron-maintenance.log 2>&1
+```
+
+Asegúrate de otorgar permisos de ejecución a los scripts:
+```bash
+chmod +x docker/scripts/backup/backup.sh
+chmod +x docker/scripts/backup/restore.sh
+chmod +x docker/scripts/maintenance/nightly-cleanup.sh
+```
+
+---
+
+### 2. Respaldos Automatizados (`backup.sh`)
+
+El script `docker/scripts/backup/backup.sh` realiza automáticamente:
+1. **Volcado PostgreSQL Comprimido:** Ejecuta `pg_dump` con `--clean --if-exists` y lo comprime con `gzip` (`backups/backup_YYYYMMDD_HHMMSS.sql.gz`).
+2. **Empaquetado del Volumen de Fotos:** Genera un tarball comprimido del volumen `app_uploads` (`backups/uploads_YYYYMMDD_HHMMSS.tar.gz`).
+3. **Validación de Integridad:** Comprueba con `gzip -t` y `tar -tzf` que ningún archivo resultante esté corrupto o incompleto.
+4. **Política de Retención (7 días):** Depura automáticamente archivos de respaldo con más de 7 días de antigüedad (`find ... -mtime +7 -delete`).
+5. **Auditoría:** Registra cada operación y tamaño en `backups/backup.log` con marca temporal UTC-5.
+
+Ejecución manual de respaldo:
+```bash
+./docker/scripts/backup/backup.sh
+```
+
+---
+
+### 3. Procedimiento de Restauración ante Desastre (`restore.sh`)
+
+El script `docker/scripts/backup/restore.sh` ejecuta la recuperación transaccional garantizando un RTO < 30m:
+
+#### Caso A: Restauración en el Servidor Activo (Fallo lógico o corrupción)
+```bash
+# Restaurar base de datos y fotografías del último respaldo generado
+./docker/scripts/backup/restore.sh backups/backup_YYYYMMDD_HHMMSS.sql.gz backups/uploads_YYYYMMDD_HHMMSS.tar.gz
+
+# O forzar modo no interactivo (por ejemplo, en scripts automatizados de DR):
+./docker/scripts/backup/restore.sh backups/backup_YYYYMMDD_HHMMSS.sql.gz backups/uploads_YYYYMMDD_HHMMSS.tar.gz --force
+```
+
+El script ejecuta automáticamente:
+1. Verificación previa de integridad de los archivos comprimidos antes de cualquier cambio.
+2. Terminación limpia de conexiones concurrentes en PostgreSQL (`pg_terminate_backend`).
+3. Restauración transaccional con bandera `--single-transaction` y `ON_ERROR_STOP=1` (si falla una sentencia, la transacción entera se revierte de inmediato sin dejar datos a medias).
+4. Descompresión y reemplazo atómico del volumen de archivos multimedia.
+5. Verificación de integridad post-restauración (comprobación de registros en `suggestions`, `admins` y `daily_menus`).
+
+#### Caso B: Despliegue en Servidor Nuevo (Migración o Pérdida Total de Hardware)
+1. Instalar Docker Engine 24+ y Git en el nuevo servidor Debian/Ubuntu de la OTI.
+2. Clonar el repositorio y copiar el archivo `.env` institucional (conservando `NEXTAUTH_SECRET` y `RATE_LIMIT_HMAC_SECRET`).
+3. Transferir el par de archivos de respaldo (`backup_*.sql.gz` y `uploads_*.tar.gz`) a la carpeta `backups/`.
+4. Iniciar los contenedores:
+   ```bash
+   docker compose up -d --build
+   ```
+5. Ejecutar la restauración:
+   ```bash
+   ./docker/scripts/backup/restore.sh backups/backup_YYYYMMDD_HHMMSS.sql.gz backups/uploads_YYYYMMDD_HHMMSS.tar.gz --force
+   ```
+6. Verificar el estado del sistema con el endpoint de salud:
+   ```bash
+   curl http://localhost:3000/api/health
+   ```
+
+---
+
+### 4. Rutinas de Mantenimiento y Purga (`nightly-cleanup.sh`)
+
+El script `docker/scripts/maintenance/nightly-cleanup.sh` ejecuta la política de ahorro de almacenamiento y protección de datos:
+1. **Purga de Hash Efímeros (> 48 horas):** Elimina registros expirados de las tablas `submission_rate_limits` y `menu_rating_limits`. Dado que el cupo es diario, los hashes mayores a 48h no tienen vigencia y su eliminación previene crecimiento innecesario de índices.
+2. **Disociación de Fotografías en Tickets Resueltos (> 90 días):** Pone en `NULL` el campo `photo_url` en tickets con estado `resolved` mayores a 90 días y elimina físicamente los archivos del disco, reteniendo el texto y respuestas para auditoría y analítica.
+3. **Depuración de Imágenes Huérfanas (> 24 horas):** Detecta archivos en el volumen que no están referenciados por ninguna sugerencia activa en la base de datos (por ejemplo, subidas abandonadas por alumnos) y los elimina físicamente del disco respetando un período de gracia de 24 horas.
+
+---
+
+### 5. Observabilidad, Rotación de Logs y Diagnóstico Profundo
+
+1. **Rotación de Logs en Docker Compose:**
+   Los servicios `app`, `db` y `proxy` cuentan con límites estrictos de rotación para evitar saturación de particiones de disco:
+   ```yaml
+   logging:
+     driver: "json-file"
+     options:
+       max-size: "10m"
+       max-file: "3"
+   ```
+2. **Logging Estructurado y Filtro de Anonimato (`src/lib/logger`):**
+   - Todos los eventos se emiten en formato JSON estructurado: `{"timestamp", "level", "context", "message", ...}`.
+   - **Filtro Defensivo de Privacidad:** Enmascara automáticamente patrones de correos institucionales (`***@unsch.edu.pe`) y correos externos (`***@***`).
+   - **Censura Estricta:** Reemplaza automáticamente credenciales de conexión (`postgresql://***@...`), tokens JWT (`[REDACTED_JWT]`), hashes HMAC de 64 caracteres (`[REDACTED_HASH]`) y secretos de entorno.
+3. **Endpoint de Diagnóstico Profundo (`GET /api/health`):**
+   - Proporciona métricas de infraestructura en tiempo real para agentes de monitoreo (Zabbix/Prometheus/Uptime Kuma):
+     - `version`: Versión del sistema (`v1.0.0-onpremise`).
+     - `uptime`: Tiempo de actividad del proceso en segundos.
+     - `metrics.dbResponseTimeMs`: Latencia en milisegundos de la consulta de comprobación a PostgreSQL.
+     - `metrics.storage`: Permisos de escritura (`writable: true`) y estimación de bytes libres en disco (`freeBytes`).
+     - Códigos HTTP: `200` si todos los subsistemas responden; `503` con diagnóstico detallado en caso de degradación.

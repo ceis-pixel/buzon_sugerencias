@@ -40,6 +40,11 @@ services:
     networks:
       - backend
     # No published ports: the database is reachable only from the app container.
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   app:
     build:
@@ -74,6 +79,11 @@ services:
     networks:
       - backend
       - frontend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   proxy:
     image: nginx:1.27-alpine
@@ -98,6 +108,11 @@ services:
       - CHOWN
       - SETGID
       - SETUID
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   # Isolated bridge: no route to the host network or the internet.

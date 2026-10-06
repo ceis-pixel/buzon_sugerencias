@@ -18,6 +18,7 @@
     "test": "vitest run",
     "check-all": "npm run typecheck && npm run lint && npm run build",
     "check": "npm run test && npm run check-all",
+    "maintenance": "tsx scripts/nightly-cleanup.ts",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
